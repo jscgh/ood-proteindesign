@@ -109,6 +109,28 @@ else
     nseqs="<%= context.seqs_per_design %>"
     design_length="${min_length}-${max_length}"
 
+    if [ -z "${rfd_contigs}" ]; then
+        residue_numbers=$(awk -v chain_id="${chain}" '
+            substr($0, 1, 4) == "ATOM" && substr($0, 22, 1) == chain_id {
+                res = substr($0, 23, 4)
+                gsub(/ /, "", res)
+                if (res ~ /^-?[0-9]+$/) print res
+            }
+        ' "${target}" | sort -n | uniq)
+
+        first_res=$(echo "${residue_numbers}" | head -n1)
+        last_res=$(echo "${residue_numbers}" | tail -n1)
+
+        if [ -z "${first_res}" ] || [ -z "${last_res}" ]; then
+            echo "ERROR: Could not infer residues for chain '${chain}' from input PDB '${target}'."
+            echo "Please provide RFdiffusion contigs explicitly."
+            exit 1
+        fi
+
+        rfd_contigs="[${chain}${first_res}-${last_res}/0 ${design_length}]"
+        echo "Auto-generated rfd_contigs: ${rfd_contigs}"
+    fi
+
     af2_max_pae_interaction="<%= context.af2_max_pae_interaction %>"
     af2_min_plddt_overall="<%= context.af2_min_plddt_overall %>"
     af2_max_rmsd_binder_bndaln="<%= context.af2_max_rmsd_binder_bndaln %>"
@@ -118,6 +140,15 @@ else
     boltz_max_rmsd_target="<%= context.boltz_max_rmsd_target %>"
     boltz_max_rmsd_overall="<%= context.boltz_max_rmsd_overall %>"
     boltz_min_ptm_interface="<%= context.boltz_min_ptm_interface %>"
+
+    mpnn_relax_max_cycles="<%= context.mpnn_relax_max_cycles %>"
+    uncropped_target_pdb="<%= context.uncropped_target_pdb %>"
+    boltz_use_templates="<%= context.boltz_use_templates %>"
+    boltz_input_msa="<%= context.boltz_input_msa %>"
+    fold_min_ss="<%= context.fold_min_ss %>"
+    seq_min_ext_coef="<%= context.seq_min_ext_coef %>"
+    max_designs="<%= context.max_designs %>"
+    max_seqs_per_fold="<%= context.max_seqs_per_fold %>"
 
     pdj_args=(
         # Schema-style names (PapenfussLab/proteindj)
@@ -140,9 +171,7 @@ else
         --rfd_models "${MODEL_DIR}/rfd/"
     )
 
-    if [ -n "${rfd_contigs}" ]; then
-        pdj_args+=(--rfd_contigs "${rfd_contigs}")
-    fi
+    pdj_args+=(--rfd_contigs "${rfd_contigs}")
 
     if [ "${pred_method}" = "af2" ]; then
         [ -n "${af2_max_pae_interaction}" ] && pdj_args+=(--af2_max_pae_interaction "${af2_max_pae_interaction}")
@@ -150,11 +179,20 @@ else
         [ -n "${af2_max_rmsd_binder_bndaln}" ] && pdj_args+=(--af2_max_rmsd_binder_bndaln "${af2_max_rmsd_binder_bndaln}")
         [ -n "${af2_max_rmsd_binder_tgtaln}" ] && pdj_args+=(--af2_max_rmsd_binder_tgtaln "${af2_max_rmsd_binder_tgtaln}")
     elif [ "${pred_method}" = "boltz" ]; then
+        [ -n "${boltz_use_templates}" ] && pdj_args+=(--boltz_use_templates "${boltz_use_templates}")
+        [ -n "${boltz_input_msa}" ] && pdj_args+=(--boltz_input_msa "${boltz_input_msa}")
         [ -n "${boltz_max_rmsd_binder}" ] && pdj_args+=(--boltz_max_rmsd_binder "${boltz_max_rmsd_binder}")
         [ -n "${boltz_max_rmsd_target}" ] && pdj_args+=(--boltz_max_rmsd_target "${boltz_max_rmsd_target}")
         [ -n "${boltz_max_rmsd_overall}" ] && pdj_args+=(--boltz_max_rmsd_overall "${boltz_max_rmsd_overall}")
         [ -n "${boltz_min_ptm_interface}" ] && pdj_args+=(--boltz_min_ptm_interface "${boltz_min_ptm_interface}")
     fi
+
+    [ -n "${mpnn_relax_max_cycles}" ] && pdj_args+=(--mpnn_relax_max_cycles "${mpnn_relax_max_cycles}")
+    [ -n "${uncropped_target_pdb}" ] && pdj_args+=(--uncropped_target_pdb "${uncropped_target_pdb}")
+    [ -n "${fold_min_ss}" ] && pdj_args+=(--fold_min_ss "${fold_min_ss}")
+    [ -n "${seq_min_ext_coef}" ] && pdj_args+=(--seq_min_ext_coef "${seq_min_ext_coef}")
+    [ -n "${max_designs}" ] && pdj_args+=(--max_designs "${max_designs}")
+    [ -n "${max_seqs_per_fold}" ] && pdj_args+=(--max_seqs_per_fold "${max_seqs_per_fold}")
 
     nextflow run tlitfin/proteindj \
         "${pdj_args[@]}" \

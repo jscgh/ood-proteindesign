@@ -13,6 +13,16 @@ form:
     - pdj_seq_method
     - pdj_pred_method
     - pdj_rfd_contigs
+    - pdj_show_advanced
+    - pdj_advanced_heading
+    - mpnn_relax_max_cycles
+    - uncropped_target_pdb
+    - boltz_use_templates
+    - boltz_input_msa
+    - fold_min_ss
+    - seq_min_ext_coef
+    - max_designs
+    - max_seqs_per_fold
     - af2_max_pae_interaction
     - af2_min_plddt_overall
     - af2_max_rmsd_binder_bndaln
@@ -36,7 +46,7 @@ attributes:
             Choose which backend pipeline to run for this submission.
         options:
             - ["ProteinDJ (de novo binder design)", "proteindj", data-hide-jobconfig: true, data-hide-filterconfig: true]
-            - ["BindFlow (binder optimization workflow)", "bindflow", data-hide-seqs_per_design: true, data-hide-pdj_seq_method: true, data-hide-pdj_pred_method: true, data-hide-pdj_rfd_contigs: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
+            - ["BindFlow (binder optimization workflow)", "bindflow", data-hide-seqs_per_design: true, data-hide-pdj_seq_method: true, data-hide-pdj_pred_method: true, data-hide-pdj_rfd_contigs: true, data-hide-pdj_show_advanced: true, data-hide-pdj_advanced_heading: true, data-hide-mpnn_relax_max_cycles: true, data-hide-uncropped_target_pdb: true, data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-fold_min_ss: true, data-hide-seq_min_ext_coef: true, data-hide-max_designs: true, data-hide-max_seqs_per_fold: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
 
     data_warning:
         class: "d-none"
@@ -133,7 +143,7 @@ attributes:
         label: "Structure Prediction Method (ProteinDJ only)"
         options:
             - ["Boltz-2", "boltz", data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true]
-            - ["AlphaFold2 Initial Guess", "af2", data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
+            - ["AlphaFold2 Initial Guess", "af2", data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
 
     pdj_rfd_contigs:
         widget: "text_field"
@@ -142,6 +152,67 @@ attributes:
         pattern: "^\\[[A-Z0-9\\-\\/ \\[]+\\]$"
         help: |
             Optional contig override. Leave blank to let ProteinDJ auto-generate contigs using input PDB and design length.
+
+    pdj_show_advanced:
+        widget: "select"
+        label: "Show Advanced ProteinDJ Options"
+        options:
+            - ["No", "no", data-hide-pdj_advanced_heading: true, data-hide-mpnn_relax_max_cycles: true, data-hide-uncropped_target_pdb: true, data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-fold_min_ss: true, data-hide-seq_min_ext_coef: true, data-hide-max_designs: true, data-hide-max_seqs_per_fold: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
+            - ["Yes", "yes"]
+
+    pdj_advanced_heading:
+        label: "ProteinDJ Advanced (Optional)"
+        help: |
+            Optional expert controls. Defaults are usually suitable.
+
+    mpnn_relax_max_cycles:
+        widget: "number_field"
+        label: "FastRelax Cycles (ProteinMPNN path)"
+        value: 0
+        min: 0
+        max: 10
+        help: |
+            Set > 0 to enable FastRelax cycles (better quality, slower runtime).
+
+    uncropped_target_pdb:
+        widget: "path_selector"
+        label: "Uncropped Target PDB (optional)"
+        pattern: "*.pdb^"
+        placeholder: "/srv/scratch/$USER/my_project/target_uncropped.pdb"
+
+    boltz_use_templates:
+        widget: "select"
+        label: "Boltz Use Templates"
+        options:
+            - ["Yes", "true"]
+            - ["No", "false"]
+
+    boltz_input_msa:
+        widget: "path_selector"
+        label: "Boltz Input MSA (optional)"
+        pattern: "*.a3m^"
+        placeholder: "/srv/scratch/$USER/my_project/target.a3m"
+
+    fold_min_ss:
+        widget: "number_field"
+        label: "Min Secondary Structure Elements"
+        min: 0
+        max: 50
+
+    seq_min_ext_coef:
+        widget: "number_field"
+        label: "Min Extinction Coefficient"
+        min: 0
+
+    max_designs:
+        widget: "number_field"
+        label: "Max Final Designs to Keep"
+        min: 1
+
+    max_seqs_per_fold:
+        widget: "number_field"
+        label: "Max Sequences per Fold"
+        min: 1
 
     af2_max_pae_interaction:
         widget: "number_field"

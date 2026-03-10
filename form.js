@@ -50,8 +50,11 @@
     const escaped = escapeForSelector(fieldName);
     const selectors = [
       `#${CONTEXT_PREFIX}_${escaped}`,
+      `#${CONTEXT_PREFIX}_${escaped}_id`,
       `[name='${CONTEXT_PREFIX}[${fieldName}]']`,
+      `[name='${CONTEXT_PREFIX}[${fieldName}_id]']`,
       `#${escaped}`,
+      `#${escaped}_id`,
       `[name='${fieldName}']`
     ];
 
@@ -61,7 +64,9 @@
 
     if (elements.length > 0) return elements;
 
-    const label = document.querySelector(`label[for$='_${escaped}'], label[for='${escaped}']`);
+    const label = document.querySelector(
+      `label[for$='_${escaped}'], label[for$='_${escaped}_id'], label[for='${escaped}'], label[for='${escaped}_id']`
+    );
     if (!label) return [];
     const forId = label.getAttribute("for");
     if (!forId) return [];
@@ -85,6 +90,16 @@
 
   const setFieldVisibility = (fieldName, hidden) => {
     const elements = getFieldElements(fieldName);
+    const pathSelectorId = `${CONTEXT_PREFIX}_${fieldName}_path_selector`;
+    const pathSelectorModal = document.getElementById(pathSelectorId);
+    const pathSelectorButton = document.querySelector(`[data-bs-target='#${pathSelectorId}']`) ||
+      document.querySelector(`[data-target='#${pathSelectorId}']`);
+
+    const pathSelectorWrappers = [
+      pathSelectorButton ? pathSelectorButton.closest(".form-group, .mb-3, .form-item, .control-group") : null,
+      pathSelectorModal ? pathSelectorModal.closest(".form-group, .mb-3, .form-item, .control-group") : null
+    ].filter((el, idx, arr) => el && arr.indexOf(el) === idx);
+
     elements.forEach((element) => {
       const container = getFieldContainer(element);
       const controls = [element, ...Array.from((container || element).querySelectorAll("input, select, textarea"))].filter(
@@ -111,6 +126,20 @@
         }
       });
     });
+
+    pathSelectorWrappers.forEach((wrapper) => {
+      wrapper.hidden = hidden;
+      wrapper.setAttribute("aria-hidden", hidden ? "true" : "false");
+      if (hidden) {
+        wrapper.classList.add("d-none");
+      } else {
+        wrapper.classList.remove("d-none");
+      }
+    });
+
+    if (pathSelectorButton) {
+      pathSelectorButton.disabled = hidden;
+    }
   };
 
   const initDynamicHide = () => {
