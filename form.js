@@ -1,5 +1,30 @@
 (() => {
   const CONTEXT_PREFIX = "batch_connect_session_context";
+  const PDJ_ADVANCED_HIDE_TARGETS = [
+    "pdj_advanced_heading",
+    "mpnn_relax_max_cycles",
+    "uncropped_target_pdb",
+    "boltz_use_templates",
+    "boltz_input_msa",
+    "fold_min_ss",
+    "seq_min_ext_coef",
+    "max_designs",
+    "max_seqs_per_fold",
+    "af2_max_pae_interaction",
+    "af2_min_plddt_overall",
+    "af2_max_rmsd_binder_bndaln",
+    "af2_max_rmsd_binder_tgtaln",
+    "boltz_max_rmsd_binder",
+    "boltz_max_rmsd_target",
+    "boltz_max_rmsd_overall",
+    "boltz_min_ptm_interface"
+  ];
+  const CHECKBOX_HIDE_RULES = {
+    pdj_show_advanced: {
+      hideWhenChecked: new Set(),
+      hideWhenUnchecked: new Set(PDJ_ADVANCED_HIDE_TARGETS)
+    }
+  };
 
   const escapeForSelector = (value) => {
     if (window.CSS && typeof window.CSS.escape === "function") {
@@ -44,6 +69,22 @@
       });
     });
     return targets;
+  };
+
+  const getFieldNameForControl = (element) => {
+    if (!element) return "";
+
+    const nameAttribute = element.getAttribute("name") || "";
+    const contextMatch = nameAttribute.match(/\[([^\]]+)\]$/);
+    if (contextMatch && contextMatch[1]) return contextMatch[1];
+
+    const idAttribute = element.getAttribute("id") || "";
+    const contextPrefix = `${CONTEXT_PREFIX}_`;
+    if (idAttribute.startsWith(contextPrefix)) {
+      return idAttribute.slice(contextPrefix.length).replace(/_id$/, "");
+    }
+
+    return idAttribute.replace(/_id$/, "");
   };
 
   const getFieldElements = (fieldName) => {
@@ -143,18 +184,22 @@
   };
 
   const initDynamicHide = () => {
-    const controllers = Array.from(document.querySelectorAll("select")).filter((select) =>
+    const selectControllers = Array.from(document.querySelectorAll("select")).filter((select) =>
       Array.from(select.options).some((option) =>
         Array.from(option.attributes).some((attribute) => attribute.name.startsWith("data-hide-"))
       )
     );
+    const checkboxControllers = Array.from(document.querySelectorAll("input[type='checkbox']")).filter((checkbox) => {
+      const fieldName = getFieldNameForControl(checkbox);
+      return Boolean(fieldName && CHECKBOX_HIDE_RULES[fieldName]);
+    });
 
-    if (controllers.length === 0) return;
+    if (selectControllers.length === 0 && checkboxControllers.length === 0) return;
 
     const evaluate = () => {
       const fieldHiddenState = new Map();
 
-      controllers.forEach((select) => {
+      selectControllers.forEach((select) => {
         const allTargets = getAllHideTargetsForSelect(select);
         const selectedOption =
           select.selectedOptions && select.selectedOptions.length > 0
@@ -169,15 +214,35 @@
         });
       });
 
+      checkboxControllers.forEach((checkbox) => {
+        const fieldName = getFieldNameForControl(checkbox);
+        const rules = CHECKBOX_HIDE_RULES[fieldName];
+        if (!rules) return;
+
+        const allTargets = new Set([...rules.hideWhenChecked, ...rules.hideWhenUnchecked]);
+        const selectedHiddenTargets = checkbox.checked ? rules.hideWhenChecked : rules.hideWhenUnchecked;
+
+        allTargets.forEach((target) => {
+          const shouldHide = selectedHiddenTargets.has(target);
+          const previous = fieldHiddenState.get(target) || false;
+          fieldHiddenState.set(target, previous || shouldHide);
+        });
+      });
+
       fieldHiddenState.forEach((hidden, fieldName) => {
         setFieldVisibility(fieldName, hidden);
       });
     };
 
-    controllers.forEach((select) => {
+    selectControllers.forEach((select) => {
       if (select.dataset.oodHideBound === "1") return;
       select.addEventListener("change", evaluate);
       select.dataset.oodHideBound = "1";
+    });
+    checkboxControllers.forEach((checkbox) => {
+      if (checkbox.dataset.oodHideBound === "1") return;
+      checkbox.addEventListener("change", evaluate);
+      checkbox.dataset.oodHideBound = "1";
     });
 
     evaluate();

@@ -157,11 +157,10 @@ attributes:
             Optional contig override. Leave blank to let ProteinDJ auto-generate contigs using input PDB and design length.
 
     pdj_show_advanced:
-        widget: "select"
+        widget: "check_box"
         label: "Show Advanced ProteinDJ Options"
-        options:
-            - ["No", "no", data-hide-pdj_advanced_heading: true, data-hide-mpnn_relax_max_cycles: true, data-hide-uncropped_target_pdb: true, data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-fold_min_ss: true, data-hide-seq_min_ext_coef: true, data-hide-max_designs: true, data-hide-max_seqs_per_fold: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
-            - ["Yes", "yes"]
+        checked_value: "yes"
+        unchecked_value: "no"
         help: |
             Optional expert controls. Defaults are usually suitable.
 
