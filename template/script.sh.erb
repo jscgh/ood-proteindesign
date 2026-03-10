@@ -78,8 +78,29 @@ else
     target_range="<%= context.target_range %>"
     chain="<%= context.target_chain %>"
     hotspots_raw="<%= context.hotspots %>"
-    hotspots_numeric=$(echo "${hotspots_raw}" | tr -d '[:space:]' | sed -E 's/,+/,/g; s/^,//; s/,$//')
-    hotspots=$(echo "${hotspots_numeric}" | sed -E "s/([0-9]+)/${chain}\\1/g")
+    hotspots_clean=$(echo "${hotspots_raw}" | tr -d '[:space:]' | sed -E 's/,+/,/g; s/^,//; s/,$//')
+
+    # ProteinDJ expects chain-prefixed hotspots (e.g. A231). We accept numeric
+    # input and defensively avoid double-prefixing if a chain was provided.
+    hotspots=""
+    IFS=',' read -r -a hotspot_items <<< "${hotspots_clean}"
+    for item in "${hotspot_items[@]}"; do
+        [ -z "${item}" ] && continue
+
+        if [[ "${item}" =~ ^[0-9]+$ ]]; then
+            formatted="${chain}${item}"
+        elif [[ "${item}" =~ ^[A-Za-z][0-9]+$ ]]; then
+            formatted="${item}"
+        else
+            formatted="${item}"
+        fi
+
+        if [ -n "${hotspots}" ]; then
+            hotspots="${hotspots},${formatted}"
+        else
+            hotspots="${formatted}"
+        fi
+    done
     min_length="<%= context.minlen %>"
     max_length="<%= context.maxlen %>"
     ndesigns="<%= context.ndesigns %>"
