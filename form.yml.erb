@@ -4,13 +4,23 @@ form:
     - run_name
     - target
     - target_chain
-    - target_range
     - hotspots
     - hotspots_help
     - minlen
     - maxlen
     - ndesigns
     - seqs_per_design
+    - pdj_seq_method
+    - pdj_pred_method
+    - pdj_rfd_contigs
+    - af2_max_pae_interaction
+    - af2_min_plddt_overall
+    - af2_max_rmsd_binder_bndaln
+    - af2_max_rmsd_binder_tgtaln
+    - boltz_max_rmsd_binder
+    - boltz_max_rmsd_target
+    - boltz_max_rmsd_overall
+    - boltz_min_ptm_interface
     - jobconfig
     - filterconfig
     - citation_request
@@ -26,7 +36,7 @@ attributes:
             Choose which backend pipeline to run for this submission.
         options:
             - ["ProteinDJ (de novo binder design)", "proteindj", data-hide-jobconfig: true, data-hide-filterconfig: true]
-            - ["BindFlow (binder optimization workflow)", "bindflow", data-hide-target_range: true, data-hide-seqs_per_design: true]
+            - ["BindFlow (binder optimization workflow)", "bindflow", data-hide-seqs_per_design: true, data-hide-pdj_seq_method: true, data-hide-pdj_pred_method: true, data-hide-pdj_rfd_contigs: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
 
     data_warning:
         class: "d-none"
@@ -61,14 +71,6 @@ attributes:
         required: true
         help: |
             Single alphanumeric character.
-
-    target_range:
-        widget: "text_field"
-        label: "Target Range (ProteinDJ only)"
-        placeholder: "1-100"
-        pattern: "^[0-9_-]+$"
-        help: |
-            Residue range used by ProteinDJ contig, for example <code>1-100</code>.
 
     hotspots:
         widget: "text_field"
@@ -113,9 +115,89 @@ attributes:
     seqs_per_design:
         widget: "number_field"
         label: "Seqs per Backbone Design (ProteinDJ only)"
-        value: 2
+        value: 8
         min: 1
-        max: 8
+        max: 20
+
+    pdj_seq_method:
+        widget: "select"
+        label: "Sequence Design Method (ProteinDJ only)"
+        help: |
+            ProteinMPNN is generally preferred for binder quality.
+        options:
+            - ["ProteinMPNN (+FastRelax path)", "mpnn"]
+            - ["FAMPNN", "fampnn"]
+
+    pdj_pred_method:
+        widget: "select"
+        label: "Structure Prediction Method (ProteinDJ only)"
+        options:
+            - ["Boltz-2", "boltz", data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true]
+            - ["AlphaFold2 Initial Guess", "af2", data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
+
+    pdj_rfd_contigs:
+        widget: "text_field"
+        label: "RFdiffusion Contigs (Optional, ProteinDJ only)"
+        placeholder: "[A17-145/0 50-100]"
+        pattern: "^\\[[A-Z0-9\\-\\/ \\[]+\\]$"
+        help: |
+            Optional contig override. Leave blank to let ProteinDJ auto-generate contigs using input PDB and design length.
+
+    af2_max_pae_interaction:
+        widget: "number_field"
+        label: "AF2 max PAE interaction"
+        value: 10
+        min: 0
+
+    af2_min_plddt_overall:
+        widget: "number_field"
+        label: "AF2 min pLDDT overall"
+        value: 90
+        min: 0
+        max: 100
+
+    af2_max_rmsd_binder_bndaln:
+        widget: "number_field"
+        label: "AF2 max binder RMSD (binder-aligned)"
+        value: 1.5
+        min: 0
+        step: 0.1
+
+    af2_max_rmsd_binder_tgtaln:
+        widget: "number_field"
+        label: "AF2 max binder RMSD (target-aligned)"
+        value: 2
+        min: 0
+        step: 0.1
+
+    boltz_max_rmsd_binder:
+        widget: "number_field"
+        label: "Boltz max binder RMSD"
+        value: 1.5
+        min: 0
+        step: 0.1
+
+    boltz_max_rmsd_target:
+        widget: "number_field"
+        label: "Boltz max target RMSD"
+        value: 2
+        min: 0
+        step: 0.1
+
+    boltz_max_rmsd_overall:
+        widget: "number_field"
+        label: "Boltz max overall RMSD"
+        value: 2.5
+        min: 0
+        step: 0.1
+
+    boltz_min_ptm_interface:
+        widget: "number_field"
+        label: "Boltz min pTM interface"
+        value: 0.85
+        min: 0
+        max: 1
+        step: 0.01
 
     jobconfig:
         widget: "select"

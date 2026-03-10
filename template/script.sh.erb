@@ -75,8 +75,10 @@ else
 
     run_name="<%= context.run_name %>"
     target="<%= context.target %>"
-    target_range="<%= context.target_range %>"
     chain="<%= context.target_chain %>"
+    seq_method="<%= context.pdj_seq_method %>"
+    pred_method="<%= context.pdj_pred_method %>"
+    rfd_contigs="<%= context.pdj_rfd_contigs %>"
     hotspots_raw="<%= context.hotspots %>"
     hotspots_clean=$(echo "${hotspots_raw}" | tr -d '[:space:]' | sed -E 's/,+/,/g; s/^,//; s/,$//')
 
@@ -105,19 +107,57 @@ else
     max_length="<%= context.maxlen %>"
     ndesigns="<%= context.ndesigns %>"
     nseqs="<%= context.seqs_per_design %>"
+    design_length="${min_length}-${max_length}"
+
+    af2_max_pae_interaction="<%= context.af2_max_pae_interaction %>"
+    af2_min_plddt_overall="<%= context.af2_min_plddt_overall %>"
+    af2_max_rmsd_binder_bndaln="<%= context.af2_max_rmsd_binder_bndaln %>"
+    af2_max_rmsd_binder_tgtaln="<%= context.af2_max_rmsd_binder_tgtaln %>"
+
+    boltz_max_rmsd_binder="<%= context.boltz_max_rmsd_binder %>"
+    boltz_max_rmsd_target="<%= context.boltz_max_rmsd_target %>"
+    boltz_max_rmsd_overall="<%= context.boltz_max_rmsd_overall %>"
+    boltz_min_ptm_interface="<%= context.boltz_min_ptm_interface %>"
+
+    pdj_args=(
+        # Schema-style names (PapenfussLab/proteindj)
+        --design_mode 'binder_denovo'
+        --num_designs "${ndesigns}"
+        --input_pdb "${target}"
+        --hotspot_residues "${hotspots}"
+        # Legacy names (older tlitfin/PapenfussLab revisions)
+        --rfd_num_designs "${ndesigns}"
+        --rfd_mode 'binder_denovo'
+        --rfd_input_pdb "${target}"
+        --rfd_hotspots "[${hotspots}]"
+        --design_length "${design_length}"
+        --seqs_per_design "${nseqs}"
+        --seq_method "${seq_method}"
+        --pred_method "${pred_method}"
+        --gpus 20
+        --out_dir "${OUT_DIR}"
+        --af2_models "${MODEL_DIR}/af2/"
+        --rfd_models "${MODEL_DIR}/rfd/"
+    )
+
+    if [ -n "${rfd_contigs}" ]; then
+        pdj_args+=(--rfd_contigs "${rfd_contigs}")
+    fi
+
+    if [ "${pred_method}" = "af2" ]; then
+        [ -n "${af2_max_pae_interaction}" ] && pdj_args+=(--af2_max_pae_interaction "${af2_max_pae_interaction}")
+        [ -n "${af2_min_plddt_overall}" ] && pdj_args+=(--af2_min_plddt_overall "${af2_min_plddt_overall}")
+        [ -n "${af2_max_rmsd_binder_bndaln}" ] && pdj_args+=(--af2_max_rmsd_binder_bndaln "${af2_max_rmsd_binder_bndaln}")
+        [ -n "${af2_max_rmsd_binder_tgtaln}" ] && pdj_args+=(--af2_max_rmsd_binder_tgtaln "${af2_max_rmsd_binder_tgtaln}")
+    elif [ "${pred_method}" = "boltz" ]; then
+        [ -n "${boltz_max_rmsd_binder}" ] && pdj_args+=(--boltz_max_rmsd_binder "${boltz_max_rmsd_binder}")
+        [ -n "${boltz_max_rmsd_target}" ] && pdj_args+=(--boltz_max_rmsd_target "${boltz_max_rmsd_target}")
+        [ -n "${boltz_max_rmsd_overall}" ] && pdj_args+=(--boltz_max_rmsd_overall "${boltz_max_rmsd_overall}")
+        [ -n "${boltz_min_ptm_interface}" ] && pdj_args+=(--boltz_min_ptm_interface "${boltz_min_ptm_interface}")
+    fi
 
     nextflow run tlitfin/proteindj \
-        --rfd_num_designs ${ndesigns} \
-        --rfd_mode 'binder_denovo' \
-        --rfd_input_pdb ${target} \
-        --rfd_contigs "[${chain}${target_range}/0 ${min_length}-${max_length}]" \
-        --rfd_hotspots \[${hotspots}\] \
-        --seqs_per_design ${nseqs} \
-        --pred_method 'af2' \
-        --gpus 20 \
-        --out_dir ${OUT_DIR} \
-        --af2_models ${MODEL_DIR}/af2/ \
-        --rfd_models ${MODEL_DIR}/rfd/ \
+        "${pdj_args[@]}" \
         -c ${BASE_DIR}/kod-pdj-denovo.config \
         -profile apptainer \
         -r main
