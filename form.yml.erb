@@ -3,6 +3,7 @@ form:
     - data_warning
     - run_name
     - target
+    - target_preview
     - target_chain
     - hotspots
     - minlen
@@ -70,6 +71,13 @@ attributes:
         required: true
         help: |
             Path to a PDB file containing the target structure.
+            <div id="ood-molstar-preview"
+                 data-url-template="<%= ENV.fetch('PROTEINDESIGN_MOLSTAR_URL_TEMPLATE', '/pun/sys/dashboard/files/fs/__PATH_SEGMENTS__') %>">
+                <button type="button" id="ood-molstar-load" class="btn btn-secondary btn-sm">
+                    Preview Target
+                </button>
+                <div id="ood-molstar-container" style="height: 420px; margin-top: 0.75rem; border: 1px solid #d0d0d0; border-radius: 0.25rem; overflow: hidden;"></div>
+            </div>
 
     target_chain:
         widget: "text_field"

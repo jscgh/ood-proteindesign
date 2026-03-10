@@ -454,6 +454,141 @@
     syncFromNumberInputs();
   };
 
+  const loadScriptOnce = (id, src) =>
+    new Promise((resolve, reject) => {
+      const existing = document.getElementById(id);
+      if (existing) {
+        if (existing.dataset.loaded === "1") {
+          resolve();
+          return;
+        }
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.id = id;
+      script.src = src;
+      script.async = true;
+      script.addEventListener("load", () => {
+        script.dataset.loaded = "1";
+        resolve();
+      }, { once: true });
+      script.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      document.head.appendChild(script);
+    });
+
+  const loadStylesheetOnce = (id, href) =>
+    new Promise((resolve, reject) => {
+      const existing = document.getElementById(id);
+      if (existing) {
+        resolve();
+        return;
+      }
+
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      link.href = href;
+      link.addEventListener("load", () => resolve(), { once: true });
+      link.addEventListener("error", () => reject(new Error(`Failed to load ${href}`)), { once: true });
+      document.head.appendChild(link);
+    });
+
+  const ensureMolstarScopedStyles = () => {
+    if (document.getElementById("ood-molstar-scoped-style")) return;
+
+    const style = document.createElement("style");
+    style.id = "ood-molstar-scoped-style";
+    style.textContent = `
+      #ood-molstar-container {
+        position: relative;
+        width: 100%;
+        height: 420px;
+        min-height: 420px;
+        max-height: 420px;
+        overflow: hidden;
+      }
+      #ood-molstar-container .msp-plugin,
+      #ood-molstar-container .msp-layout-standard,
+      #ood-molstar-container .msp-layout-expanded,
+      #ood-molstar-container .msp-plugin-content,
+      #ood-molstar-container .msp-viewport {
+        position: relative !important;
+        inset: auto !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 420px !important;
+      }
+      #ood-molstar-container .msp-layout-region-left,
+      #ood-molstar-container .msp-layout-region-right,
+      #ood-molstar-container .msp-layout-region-bottom,
+      #ood-molstar-container .msp-sequence-wrapper {
+        display: none !important;
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+        height: 0 !important;
+      }
+      #ood-molstar-container .msp-layout-region-main {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        top: 0 !important;
+      }
+      #ood-molstar-container .msp-viewport-controls .msp-btn[title*="Expand"],
+      #ood-molstar-container .msp-viewport-controls .msp-btn[title*="expand"] {
+        display: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+  };
+
+  let molstarAssetsPromise = null;
+  const ensureMolstarAssets = () => {
+    if (window.molstar && window.molstar.Viewer) return Promise.resolve();
+    if (molstarAssetsPromise) return molstarAssetsPromise;
+
+    molstarAssetsPromise = Promise.all([
+      loadStylesheetOnce("ood-molstar-css", "https://cdn.jsdelivr.net/npm/molstar@4/build/viewer/molstar.css"),
+      loadScriptOnce("ood-molstar-js", "https://cdn.jsdelivr.net/npm/molstar@4/build/viewer/molstar.js")
+    ]).then(() => {
+      if (!window.molstar || !window.molstar.Viewer) {
+        throw new Error("Mol* loaded but Viewer API was not found.");
+      }
+    });
+
+    return molstarAssetsPromise;
+  };
+
+  const buildPathPreviewUrl = (template, rawPath) => {
+    if (!template || !rawPath) return null;
+    const trimmed = rawPath.trim();
+    if (!trimmed) return null;
+
+    const withoutLeadingSlash = trimmed.replace(/^\/+/, "");
+    const segmented = withoutLeadingSlash
+      .split("/")
+      .filter((segment) => segment.length > 0)
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+    const encodedPath = encodeURIComponent(trimmed);
+
+    return template
+      .replace(/__PATH_SEGMENTS__/g, segmented)
+      .replace(/__PATH_ENCODED__/g, encodedPath)
+      .replace(/__PATH__/g, withoutLeadingSlash);
+  };
+
+  const inferFormatFromUrl = (url) => {
+    const normalized = (url || "").toLowerCase();
+    if (normalized.endsWith(".cif") || normalized.endsWith(".mmcif") || normalized.endsWith(".bcif")) {
+      return "mmcif";
+    }
+    return "pdb";
+  };
+
   onReady(() => {
     const targetInput = findInput("target");
     const minlenInput = findInput("minlen");
@@ -466,8 +601,148 @@
     const dataWarningField = findFieldContainer("data_warning");
     const citationField = findFieldContainer("citation_request");
     const katanaCitationField = findFieldContainer("katana_citation");
+    const molstarPreviewRoot = document.getElementById("ood-molstar-preview");
+    const molstarStatus = document.getElementById("ood-molstar-status");
+    const molstarLoadButton = document.getElementById("ood-molstar-load");
+    const molstarContainer = document.getElementById("ood-molstar-container");
+    const molstarUrlTemplate = molstarPreviewRoot
+      ? (molstarPreviewRoot.getAttribute("data-url-template") || "").trim()
+      : "";
+    let molstarViewer = null;
 
     let filterConfigTouched = false;
+
+    const setMolstarStatus = (message, isError = false) => {
+      if (!molstarStatus) return;
+      molstarStatus.textContent = message;
+      molstarStatus.style.color = isError ? "#9f1d1d" : "#555";
+    };
+
+    const getTargetSource = () => {
+      if (!targetInput) return null;
+      const value = targetInput.value.trim();
+      if (!value) return null;
+
+      if (/^[1-9][A-Za-z0-9]{3}$/.test(value)) {
+        return {
+          url: `https://files.rcsb.org/download/${value.toUpperCase()}.pdb`,
+          format: "pdb",
+          label: `RCSB ${value.toUpperCase()}`
+        };
+      }
+
+      if (/^https?:\/\//i.test(value)) {
+        return {
+          url: value,
+          format: inferFormatFromUrl(value),
+          label: value
+        };
+      }
+
+      const pathUrl = buildPathPreviewUrl(molstarUrlTemplate, value);
+      if (pathUrl) {
+        return {
+          url: pathUrl,
+          format: inferFormatFromUrl(value),
+          label: value
+        };
+      }
+
+      return null;
+    };
+
+    const ensureMolstarViewer = async () => {
+      if (!molstarContainer) throw new Error("Mol* container is unavailable.");
+      if (molstarViewer) return molstarViewer;
+
+      await ensureMolstarAssets();
+      ensureMolstarScopedStyles();
+      molstarViewer = await window.molstar.Viewer.create("ood-molstar-container", {
+        layoutIsExpanded: false,
+        layoutShowControls: false,
+        layoutShowRemoteState: false,
+        layoutShowSequence: false,
+        viewportShowControls: true,
+        viewportShowExpand: false
+      });
+      return molstarViewer;
+    };
+
+    const preventMolstarButtonSubmit = () => {
+      if (!molstarContainer) return;
+
+      const normalizeButtonType = (root) => {
+        if (!root || !root.querySelectorAll) return;
+        root.querySelectorAll("button").forEach((button) => {
+          const type = (button.getAttribute("type") || "").trim().toLowerCase();
+          if (!type || type === "submit") {
+            button.type = "button";
+          }
+        });
+      };
+
+      normalizeButtonType(molstarContainer);
+
+      molstarContainer.addEventListener(
+        "click",
+        (event) => {
+          const button = event.target && event.target.closest ? event.target.closest("button") : null;
+          if (!button || !molstarContainer.contains(button)) return;
+
+          const type = (button.getAttribute("type") || "").trim().toLowerCase();
+          if (!type || type === "submit") {
+            button.type = "button";
+            event.preventDefault();
+          }
+        },
+        true
+      );
+
+      const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType !== Node.ELEMENT_NODE) return;
+            if (node.matches && node.matches("button")) {
+              const type = (node.getAttribute("type") || "").trim().toLowerCase();
+              if (!type || type === "submit") {
+                node.type = "button";
+              }
+            }
+            normalizeButtonType(node);
+          });
+        }
+      });
+
+      observer.observe(molstarContainer, { childList: true, subtree: true });
+    };
+
+    const loadMolstarTarget = async () => {
+      const source = getTargetSource();
+      if (!source) {
+        if (molstarUrlTemplate) {
+          setMolstarStatus("Enter a valid target path, URL, or 4-character PDB ID before previewing.", true);
+        } else {
+          setMolstarStatus(
+            "Set PROTEINDESIGN_MOLSTAR_URL_TEMPLATE for filesystem paths, or enter a PDB ID (e.g. 1CRN).",
+            true
+          );
+        }
+        return;
+      }
+
+      setMolstarStatus(`Loading ${source.label}...`);
+      if (molstarLoadButton) molstarLoadButton.disabled = true;
+
+      try {
+        const viewer = await ensureMolstarViewer();
+        await viewer.loadStructureFromUrl(source.url, source.format);
+        setMolstarStatus(`Loaded ${source.label}.`);
+      } catch (error) {
+        setMolstarStatus(`Could not load target: ${error.message}`, true);
+      } finally {
+        if (molstarLoadButton) molstarLoadButton.disabled = false;
+      }
+    };
 
     const validateLengths = () => {
       if (!minlenInput || !maxlenInput) return;
@@ -539,6 +814,12 @@
       updateWarningVisibility();
       updateCitationVisibility();
     }
+
+    if (molstarLoadButton) {
+      molstarLoadButton.addEventListener("click", loadMolstarTarget);
+    }
+
+    preventMolstarButtonSubmit();
 
     if (hotspotsInput) {
       hotspotsInput.addEventListener("blur", () => {
