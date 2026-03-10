@@ -5,7 +5,6 @@ form:
     - target
     - target_chain
     - hotspots
-    - hotspots_help
     - minlen
     - maxlen
     - ndesigns
@@ -14,7 +13,6 @@ form:
     - pdj_pred_method
     - pdj_rfd_contigs
     - pdj_show_advanced
-    - pdj_advanced_heading
     - mpnn_relax_max_cycles
     - uncropped_target_pdb
     - boltz_use_templates
@@ -45,8 +43,8 @@ attributes:
         help: |
             Choose which backend pipeline to run for this submission.
         options:
-            - ["ProteinDJ (de novo binder design)", "proteindj", data-hide-jobconfig: true, data-hide-filterconfig: true]
-            - ["BindFlow (binder optimization workflow)", "bindflow", data-hide-seqs_per_design: true, data-hide-pdj_seq_method: true, data-hide-pdj_pred_method: true, data-hide-pdj_rfd_contigs: true, data-hide-pdj_show_advanced: true, data-hide-pdj_advanced_heading: true, data-hide-mpnn_relax_max_cycles: true, data-hide-uncropped_target_pdb: true, data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-fold_min_ss: true, data-hide-seq_min_ext_coef: true, data-hide-max_designs: true, data-hide-max_seqs_per_fold: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
+            - ["ProteinDJ (RFdiffusion workflow)", "proteindj", data-hide-jobconfig: true, data-hide-filterconfig: true]
+            - ["BindFlow (BindCraft workflow)", "bindflow", data-hide-seqs_per_design: true, data-hide-pdj_seq_method: true, data-hide-pdj_pred_method: true, data-hide-pdj_rfd_contigs: true, data-hide-pdj_show_advanced: true, data-hide-pdj_advanced_heading: true, data-hide-mpnn_relax_max_cycles: true, data-hide-uncropped_target_pdb: true, data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-fold_min_ss: true, data-hide-seq_min_ext_coef: true, data-hide-max_designs: true, data-hide-max_seqs_per_fold: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
 
     data_warning:
         class: "d-none"
@@ -89,14 +87,7 @@ attributes:
         pattern: '^[0-9, ]+$'
         required: true
         help: |
-            Comma-separated residue numbers (spaces allowed). In ProteinDJ mode, the selected target chain is automatically prepended.
-
-    hotspots_help:
-        class: "d-none"
-        label: "Hotspot Examples"
-        help: |
-            Single site: <code>231</code>
-            <br>Multiple sites: <code>231, 235, 427, 431</code>
+            Comma-separated residue numbers (spaces allowed).
 
     minlen:
         widget: "number_field"
@@ -136,7 +127,7 @@ attributes:
             ProteinMPNN is generally preferred for binder quality.
         options:
             - ["ProteinMPNN (+FastRelax path)", "mpnn"]
-            - ["FAMPNN", "fampnn"]
+            - ["FAMPNN", "fampnn", data-hide-mpnn_relax_max_cycles: true]
 
     pdj_pred_method:
         widget: "select"
@@ -159,16 +150,13 @@ attributes:
         options:
             - ["No", "no", data-hide-pdj_advanced_heading: true, data-hide-mpnn_relax_max_cycles: true, data-hide-uncropped_target_pdb: true, data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-fold_min_ss: true, data-hide-seq_min_ext_coef: true, data-hide-max_designs: true, data-hide-max_seqs_per_fold: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
             - ["Yes", "yes"]
-
-    pdj_advanced_heading:
-        label: "ProteinDJ Advanced (Optional)"
         help: |
             Optional expert controls. Defaults are usually suitable.
 
     mpnn_relax_max_cycles:
         widget: "number_field"
         label: "FastRelax Cycles (ProteinMPNN path)"
-        value: 0
+        value: 1
         min: 0
         max: 10
         help: |

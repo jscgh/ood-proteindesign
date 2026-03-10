@@ -231,6 +231,229 @@
     }
   };
 
+  const toNumberOr = (value, fallback) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const clamp = (value, lower, upper) => Math.min(upper, Math.max(lower, value));
+
+  const ensureDualRangeStyles = () => {
+    if (document.getElementById("ood-dual-range-style")) return;
+
+    const style = document.createElement("style");
+    style.id = "ood-dual-range-style";
+    style.textContent = `
+      .ood-dual-range-wrap { margin-top: 0.5rem; }
+      .ood-dual-range-track {
+        position: relative;
+        height: 1.75rem;
+      }
+      .ood-dual-range-base,
+      .ood-dual-range-fill {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0.7rem;
+        height: 0.35rem;
+        border-radius: 999px;
+      }
+      .ood-dual-range-base { background: #d7dbe0; }
+      .ood-dual-range-fill { background: #0d6efd; }
+      .ood-dual-range {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 1.75rem;
+        margin: 0;
+        pointer-events: none;
+        -webkit-appearance: none;
+        appearance: none;
+        background: transparent;
+      }
+      .ood-dual-range::-webkit-slider-runnable-track {
+        height: 0.35rem;
+        background: transparent;
+      }
+      .ood-dual-range::-moz-range-track {
+        height: 0.35rem;
+        background: transparent;
+      }
+      .ood-dual-range::-webkit-slider-thumb {
+        pointer-events: auto;
+        width: 1rem;
+        height: 1rem;
+        border: 0;
+        border-radius: 50%;
+        background: #0d6efd;
+        cursor: pointer;
+        -webkit-appearance: none;
+        appearance: none;
+        margin-top: -0.35rem;
+      }
+      .ood-dual-range::-moz-range-thumb {
+        pointer-events: auto;
+        width: 1rem;
+        height: 1rem;
+        border: 0;
+        border-radius: 50%;
+        background: #0d6efd;
+        cursor: pointer;
+      }
+      .ood-dual-range-values {
+        margin-top: 0.25rem;
+        font-size: 0.875rem;
+      }
+    `;
+    document.head.appendChild(style);
+  };
+
+  const createRangeInput = (lower, upper, value, labelText) => {
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = String(lower);
+    input.max = String(upper);
+    input.step = "1";
+    input.value = String(clamp(value, lower, upper));
+    input.className = "ood-dual-range";
+    input.setAttribute("aria-label", labelText);
+    return input;
+  };
+
+  const maskFieldContainer = (container) => {
+    if (!container) return;
+    container.style.display = "none";
+    container.setAttribute("aria-hidden", "true");
+  };
+
+  const initLengthSliders = (minlenInput, maxlenInput, validateLengths) => {
+    if (!minlenInput || !maxlenInput) return;
+    if (minlenInput.dataset.oodLengthSliderInit === "1") return;
+
+    const minlenContainer = getFieldContainer(minlenInput);
+    const maxlenContainer = getFieldContainer(maxlenInput);
+    if (!minlenContainer || !maxlenContainer) return;
+
+    const minBound = Math.min(
+      toNumberOr(minlenInput.getAttribute("min"), 10),
+      toNumberOr(maxlenInput.getAttribute("min"), 11)
+    );
+    const maxBound = Math.max(
+      toNumberOr(minlenInput.getAttribute("max"), 199),
+      toNumberOr(maxlenInput.getAttribute("max"), 200)
+    );
+
+    ensureDualRangeStyles();
+
+    const sliderWrap = document.createElement("div");
+    sliderWrap.className = "ood-dual-range-wrap";
+
+    const heading = document.createElement("div");
+    heading.style.fontWeight = "600";
+    heading.style.marginBottom = "0.25rem";
+    heading.textContent = "Binder Length";
+
+    const sliderTrack = document.createElement("div");
+    sliderTrack.className = "ood-dual-range-track";
+
+    const baseTrack = document.createElement("div");
+    baseTrack.className = "ood-dual-range-base";
+
+    const fillTrack = document.createElement("div");
+    fillTrack.className = "ood-dual-range-fill";
+
+    const minSlider = createRangeInput(
+      minBound,
+      maxBound,
+      toNumberOr(minlenInput.value, minBound),
+      "Minimum Length slider"
+    );
+    const maxSlider = createRangeInput(
+      minBound,
+      maxBound,
+      toNumberOr(maxlenInput.value, maxBound),
+      "Maximum Length slider"
+    );
+
+    const valueLabel = document.createElement("div");
+    valueLabel.className = "ood-dual-range-values";
+
+    sliderTrack.appendChild(baseTrack);
+    sliderTrack.appendChild(fillTrack);
+    sliderTrack.appendChild(minSlider);
+    sliderTrack.appendChild(maxSlider);
+    sliderWrap.appendChild(heading);
+    sliderWrap.appendChild(sliderTrack);
+    sliderWrap.appendChild(valueLabel);
+
+    minlenContainer.parentNode.insertBefore(sliderWrap, minlenContainer);
+    maskFieldContainer(minlenContainer);
+    maskFieldContainer(maxlenContainer);
+
+    minlenInput.dataset.oodLengthSliderInit = "1";
+    maxlenInput.dataset.oodLengthSliderInit = "1";
+
+    const updateFillTrack = () => {
+      const minValue = toNumberOr(minlenInput.value, minBound);
+      const maxValue = toNumberOr(maxlenInput.value, maxBound);
+      const sortedMin = Math.min(minValue, maxValue);
+      const sortedMax = Math.max(minValue, maxValue);
+      const span = Math.max(1, maxBound - minBound);
+      const percentMin = ((sortedMin - minBound) / span) * 100;
+      const percentMax = ((sortedMax - minBound) / span) * 100;
+
+      fillTrack.style.left = `${percentMin}%`;
+      fillTrack.style.right = `${100 - percentMax}%`;
+      valueLabel.textContent = `Selected range: ${minValue} - ${maxValue}`;
+    };
+
+    const syncFromNumberInputs = () => {
+      const minValue = clamp(toNumberOr(minlenInput.value, minBound), minBound, maxBound);
+      const maxValue = clamp(toNumberOr(maxlenInput.value, maxBound), minBound, maxBound);
+
+      minSlider.value = String(minValue);
+      maxSlider.value = String(maxValue);
+      updateFillTrack();
+    };
+
+    const setNumberValue = (numberInput, nextValue) => {
+      if (numberInput.value === String(nextValue)) return;
+      numberInput.value = String(nextValue);
+      numberInput.dispatchEvent(new Event("input", { bubbles: true }));
+      numberInput.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+
+    minSlider.addEventListener("input", () => {
+      const nextMin = toNumberOr(minSlider.value, minBound);
+      const currentMax = toNumberOr(maxlenInput.value, maxBound);
+      setNumberValue(minlenInput, nextMin);
+      if (nextMin > currentMax) {
+        setNumberValue(maxlenInput, nextMin);
+      }
+      syncFromNumberInputs();
+      validateLengths();
+    });
+
+    maxSlider.addEventListener("input", () => {
+      const nextMax = toNumberOr(maxSlider.value, maxBound);
+      const currentMin = toNumberOr(minlenInput.value, minBound);
+      setNumberValue(maxlenInput, nextMax);
+      if (nextMax < currentMin) {
+        setNumberValue(minlenInput, nextMax);
+      }
+      syncFromNumberInputs();
+      validateLengths();
+    });
+
+    minlenInput.addEventListener("input", syncFromNumberInputs);
+    maxlenInput.addEventListener("input", syncFromNumberInputs);
+    minlenInput.addEventListener("change", syncFromNumberInputs);
+    maxlenInput.addEventListener("change", syncFromNumberInputs);
+
+    syncFromNumberInputs();
+  };
+
   onReady(() => {
     const targetInput = findInput("target");
     const minlenInput = findInput("minlen");
@@ -300,6 +523,7 @@
       maxlenInput.addEventListener("input", validateLengths);
       minlenInput.addEventListener("change", validateLengths);
       maxlenInput.addEventListener("change", validateLengths);
+      initLengthSliders(minlenInput, maxlenInput, validateLengths);
       validateLengths();
     }
 
