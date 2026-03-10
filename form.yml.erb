@@ -1,0 +1,168 @@
+form:
+    - workflow
+    - data_warning
+    - run_name
+    - target
+    - target_chain
+    - target_range
+    - hotspots
+    - hotspots_help
+    - minlen
+    - maxlen
+    - ndesigns
+    - seqs_per_design
+    - jobconfig
+    - filterconfig
+    - citation_request
+    - katana_citation
+
+cluster: "<%= ENV.fetch('PROTEINDESIGN_CLUSTER', 'katana') %>"
+
+attributes:
+    workflow:
+        widget: "select"
+        label: "Design Workflow"
+        help: |
+            Choose which backend pipeline to run for this submission.
+        options:
+            - ["ProteinDJ (de novo binder design)", "proteindj", data-hide-jobconfig: true, data-hide-filterconfig: true]
+            - ["BindFlow (binder optimization workflow)", "bindflow", data-hide-target_range: true, data-hide-seqs_per_design: true]
+
+    data_warning:
+        class: "d-none"
+        help: |
+            <div style="padding: 0.375rem 0.75rem; background-color: #E2BEBE; border: 2px solid #761313; border-radius: 0.25rem; color: #761313;">
+                <span><b>Warning!</b> Please ensure your input data complies with your site's data handling rules. Many HPC clusters are <b>not</b> approved for sensitive or highly sensitive data.</span>
+            </div>
+
+    run_name:
+        widget: "text_field"
+        pattern: '^[A-Za-z0-9_\- ]+$'
+        label: "Run Name"
+        placeholder: "Job_name"
+        required: true
+        help: |
+            Alphanumeric, space, "_" and "-" only.
+
+    target:
+        widget: "path_selector"
+        label: "Target PDB"
+        pattern: "*.pdb^"
+        placeholder: "/srv/scratch/$USER/my_project/target.pdb"
+        required: true
+        help: |
+            Path to a PDB file containing the target structure.
+
+    target_chain:
+        widget: "text_field"
+        label: "Target Chain"
+        placeholder: "A"
+        pattern: "^[A-Za-z0-9]$"
+        required: true
+        help: |
+            Single alphanumeric character.
+
+    target_range:
+        widget: "text_field"
+        label: "Target Range (ProteinDJ only)"
+        placeholder: "1-100"
+        pattern: "^[0-9_-]+$"
+        help: |
+            Residue range used by ProteinDJ contig, for example <code>1-100</code>.
+
+    hotspots:
+        widget: "text_field"
+        label: "Target Hotspots"
+        placeholder: "231,235,427,431"
+        pattern: '^[0-9, ]+$'
+        required: true
+        help: |
+            Comma-separated residue numbers (spaces allowed). In ProteinDJ mode, the selected target chain is automatically prepended.
+
+    hotspots_help:
+        class: "d-none"
+        label: "Hotspot Examples"
+        help: |
+            Single site: <code>231</code>
+            <br>Multiple sites: <code>231, 235, 427, 431</code>
+
+    minlen:
+        widget: "number_field"
+        label: "Minimum Length"
+        value: 60
+        min: 10
+        max: 199
+        required: true
+
+    maxlen:
+        widget: "number_field"
+        label: "Maximum Length"
+        value: 100
+        min: 11
+        max: 200
+        required: true
+
+    ndesigns:
+        widget: "number_field"
+        label: "Number of Designs"
+        value: 100
+        min: 1
+        max: 1000
+        required: true
+
+    seqs_per_design:
+        widget: "number_field"
+        label: "Seqs per Backbone Design (ProteinDJ only)"
+        value: 2
+        min: 1
+        max: 8
+
+    jobconfig:
+        widget: "select"
+        label: "Job Configuration (BindFlow only)"
+        options:
+            - ["default_4stage_multimer.json", "default_4stage_multimer.json"]
+            - ["betasheet_4stage_multimer.json", "betasheet_4stage_multimer.json"]
+            - ["betasheet_4stage_multimer_flexible.json", "betasheet_4stage_multimer_flexible.json"]
+            - ["betasheet_4stage_multimer_flexible_hardtarget.json", "betasheet_4stage_multimer_flexible_hardtarget.json"]
+            - ["betasheet_4stage_multimer_hardtarget.json", "betasheet_4stage_multimer_hardtarget.json"]
+            - ["betasheet_4stage_multimer_mpnn.json", "betasheet_4stage_multimer_mpnn.json"]
+            - ["betasheet_4stage_multimer_mpnn_flexible.json", "betasheet_4stage_multimer_mpnn_flexible.json"]
+            - ["betasheet_4stage_multimer_mpnn_flexible_hardtarget.json", "betasheet_4stage_multimer_mpnn_flexible_hardtarget.json"]
+            - ["betasheet_4stage_multimer_mpnn_hardtarget.json", "betasheet_4stage_multimer_mpnn_hardtarget.json"]
+            - ["default_4stage_multimer_mpnn.json", "default_4stage_multimer_mpnn.json"]
+            - ["default_4stage_multimer_flexible.json", "default_4stage_multimer_flexible.json"]
+            - ["default_4stage_multimer_flexible_hardtarget.json", "default_4stage_multimer_flexible_hardtarget.json"]
+            - ["default_4stage_multimer_hardtarget.json", "default_4stage_multimer_hardtarget.json"]
+            - ["default_4stage_multimer_mpnn_flexible.json", "default_4stage_multimer_mpnn_flexible.json"]
+            - ["default_4stage_multimer_mpnn_flexible_hardtarget.json", "default_4stage_multimer_mpnn_flexible_hardtarget.json"]
+            - ["default_4stage_multimer_mpnn_hardtarget.json", "default_4stage_multimer_mpnn_hardtarget.json"]
+            - ["peptide_3stage_multimer.json", "peptide_3stage_multimer.json"]
+            - ["peptide_3stage_multimer_flexible.json", "peptide_3stage_multimer_flexible.json"]
+            - ["peptide_3stage_multimer_mpnn.json", "peptide_3stage_multimer_mpnn.json"]
+            - ["peptide_3stage_multimer_mpnn_flexible.json", "peptide_3stage_multimer_mpnn_flexible.json"]
+
+    filterconfig:
+        widget: "select"
+        label: "Filter Configuration (BindFlow only)"
+        options:
+            - ["default_filters.json", "default_filters.json"]
+            - ["no_filters.json", "no_filters.json"]
+            - ["peptide_filters.json", "peptide_filters.json"]
+            - ["peptide_relaxed_filters.json", "peptide_relaxed_filters.json"]
+            - ["relaxed_filters.json", "relaxed_filters.json"]
+
+    citation_request:
+        label: "Facility Citation"
+        class: "d-none"
+        help: |
+            <b><a href="https://doi.org/10.26190/4KQF-M552">10.26190/4KQF-M552</a></b>
+            <br>
+            Please cite the above DOI and include this acknowledgement in any publication that uses this resource:
+            <i>"The authors acknowledge use of facilities in the Structural Biology Facility within the Mark Wainwright Analytical Centre - UNSW"</i>
+
+    katana_citation:
+        label: "Katana HPC Citation"
+        class: "d-none"
+        help: |
+            <b>If you use Katana for a paper please cite DOI <a href="https://doi.org/10.26190/669x-a286">10.26190/669X-A286</a>.</b>

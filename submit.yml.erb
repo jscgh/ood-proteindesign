@@ -1,0 +1,36 @@
+<%
+cluster_name = ENV.fetch("PROTEINDESIGN_CLUSTER", "katana")
+queue_name = ENV.fetch("PROTEINDESIGN_QUEUE", "submission")
+default_native = ENV.fetch("PROTEINDESIGN_NATIVE_DEFAULT", "-A kod_proteindesign;-l select=1:ncpus=2:mem=4gb;-l walltime=48:00:00")
+
+def parse_native(val)
+    val.split(/\s*;\s*/).reject(&:empty?)
+end
+
+native_default_list = parse_native(default_native)
+
+email_default = ENV["PROTEINDESIGN_EMAIL"] || "#{ENV['USER']}#{ENV.fetch('PROTEINDESIGN_EMAIL_DOMAIN', '@ad.unsw.edu.au')}"
+email_selected = (defined?(email) && email && !email.strip.empty?) ? email : email_default
+%>
+
+cluster: "<%= cluster_name %>"
+
+batch_connect:
+    template: "basic"
+    queue_name: "<%= queue_name %>"
+    conn_params:
+        - workflow
+        - run_dir
+        - user
+        - base_out_dir
+        - results_url_base
+
+script:
+    native:
+        <% native_default_list.each do |entry| %>
+        - "<%= entry %>"
+        <% end %>
+        - "-N <%= (run_name || 'protein_design').gsub(' ', '_') %>"
+    email:
+        - "<%= email_selected %>"
+    email_on_terminated: "<%= email_on_terminated %>"

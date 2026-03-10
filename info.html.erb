@@ -1,0 +1,9 @@
+<% if !connect.user.blank? %>
+<%
+base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : "/srv/scratch/#{connect.user}/protein_design_output"
+results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : "/pun/sys/dashboard/files/fs"
+workflow_label = connect.respond_to?(:workflow) && connect.workflow == 'bindflow' ? 'BindFlow' : 'ProteinDJ'
+%>
+<b>Workflow</b>: <%= workflow_label %><br>
+<b>Results</b>: <a target="_blank" href="https://kod.restech.unsw.edu.au<%= results_url_base %><%= base_out_dir %>/<%= connect.run_dir %>"><%= connect.run_dir %></a>
+<% end %>

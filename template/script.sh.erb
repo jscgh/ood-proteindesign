@@ -1,0 +1,103 @@
+#!/bin/bash
+
+set -xo pipefail
+set -eE
+
+WORKFLOW="<%= context.workflow %>"
+RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
+
+ENV_FILE=".env"
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    . "$ENV_FILE"
+    set +a
+fi
+
+module purge
+module load java/21 nextflow/24
+
+export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-/srv/scratch/${USER}/apptainer_cache/}"
+export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR:-/srv/scratch/${USER}/apptainer_cache/}"
+export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf/apptainer_cache/}"
+
+if [ "$WORKFLOW" = "bindflow" ]; then
+    BASEDIR=/srv/scratch/sbf-pipelines/bindflow/
+    JOBCONFIGDIR=${BASEDIR}/advanced/
+    FILTERCONFIGDIR=${BASEDIR}/filters/
+
+    export NXF_WORK="/srv/scratch/${USER}/.bindflow/work"
+    mkdir -p "${NXF_WORK}"
+
+    BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_BIND_OUT_DIR:-/srv/scratch/${USER}/bindflow_output}}"
+    OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
+    mkdir -p "${OUT_DIR}"
+
+    run_name="<%= context.run_name %>"
+    target="<%= context.target %>"
+    chain="<%= context.target_chain %>"
+    hotspots="<%= context.hotspots %>"
+    min_length="<%= context.minlen %>"
+    max_length="<%= context.maxlen %>"
+    ndesigns="<%= context.ndesigns %>"
+    jobconfig="<%= context.jobconfig %>"
+    filterconfig="<%= context.filterconfig %>"
+
+    echo "id,binder_name,starting_pdb,chains,target_hotspot_residues,min_length,max_length,number_of_final_designs,settings_advanced,settings_filters" > samplesheet.csv
+    printf '"%s","%s","%s","%s","%s",%s,%s,%s,"%s","%s"\n' \
+        "${run_name}" \
+        "${run_name}" \
+        "${target}" \
+        "${chain}" \
+        "${hotspots}" \
+        "${min_length}" \
+        "${max_length}" \
+        "${ndesigns}" \
+        "${JOBCONFIGDIR}/${jobconfig}" \
+        "${FILTERCONFIGDIR}/${filterconfig}" >> samplesheet.csv
+
+    nextflow run Australian-Structural-Biology-Computing/bindflow \
+        --input samplesheet.csv \
+        --outdir ${OUT_DIR} \
+        -c ${BASEDIR}/kod-bindflow.config \
+        -profile apptainer \
+        -r 93e8ac776fae1c76d283dcc64f4e4571cae7a091 \
+        -latest
+else
+    BASE_DIR=/srv/scratch/sbf-pipelines/pdj-denovo/
+    MODEL_DIR=${BASE_DIR}/models/
+
+    export NXF_WORK="/srv/scratch/${USER}/.proteindj/work"
+    mkdir -p "${NXF_WORK}"
+
+    BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_PDJ_OUT_DIR:-/srv/scratch/${USER}/proteindj_output}}"
+    OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
+    mkdir -p "${OUT_DIR}"
+
+    run_name="<%= context.run_name %>"
+    target="<%= context.target %>"
+    target_range="<%= context.target_range %>"
+    chain="<%= context.target_chain %>"
+    hotspots_raw="<%= context.hotspots %>"
+    hotspots_numeric=$(echo "${hotspots_raw}" | tr -d '[:space:]' | sed -E 's/,+/,/g; s/^,//; s/,$//')
+    hotspots=$(echo "${hotspots_numeric}" | sed -E "s/([0-9]+)/${chain}\\1/g")
+    min_length="<%= context.minlen %>"
+    max_length="<%= context.maxlen %>"
+    ndesigns="<%= context.ndesigns %>"
+    nseqs="<%= context.seqs_per_design %>"
+
+    nextflow run tlitfin/proteindj \
+        --rfd_num_designs ${ndesigns} \
+        --rfd_mode 'binder_denovo' \
+        --rfd_input_pdb ${target} \
+        --rfd_contigs "[${chain}${target_range}/0 ${min_length}-${max_length}]" \
+        --rfd_hotspots \[${hotspots}\] \
+        --seqs_per_design ${nseqs} \
+        --pred_method 'af2' \
+        --gpus 20 \
+        --out_dir ${OUT_DIR} \
+        --af2_models ${MODEL_DIR}/af2/ \
+        --rfd_models ${MODEL_DIR}/rfd/ \
+        -c ${BASE_DIR}/kod-pdj-denovo.config \
+        -profile apptainer \
+        -r main
+fi
