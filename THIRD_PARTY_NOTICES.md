@@ -15,6 +15,12 @@ codebases.
 - BindCraft (used by BindFlow): https://github.com/martinpacesa/BindCraft
   - Reported license: MIT
 
+## UI libraries loaded at form runtime
+
+- Mol*: https://github.com/molstar/molstar
+  - Loaded in `form.js` from jsDelivr CDN for in-browser structure preview.
+  - License: MIT
+
 ## Important downstream licensing notes
 
 - PyRosetta licensing:
