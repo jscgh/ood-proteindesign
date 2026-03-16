@@ -575,37 +575,6 @@
         max-height: 420px;
         overflow: hidden;
       }
-      #ood-molstar-container .msp-plugin,
-      #ood-molstar-container .msp-layout-standard,
-      #ood-molstar-container .msp-layout-expanded,
-      #ood-molstar-container .msp-plugin-content,
-      #ood-molstar-container .msp-viewport {
-        position: relative !important;
-        inset: auto !important;
-        width: 100% !important;
-        height: 100% !important;
-        max-height: 420px !important;
-      }
-      #ood-molstar-container .msp-layout-region-left,
-      #ood-molstar-container .msp-layout-region-right,
-      #ood-molstar-container .msp-layout-region-bottom,
-      #ood-molstar-container .msp-sequence-wrapper {
-        display: none !important;
-        width: 0 !important;
-        min-width: 0 !important;
-        max-width: 0 !important;
-        height: 0 !important;
-      }
-      #ood-molstar-container .msp-layout-region-main {
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        top: 0 !important;
-      }
-      #ood-molstar-container .msp-viewport-controls .msp-btn[title*="Expand"],
-      #ood-molstar-container .msp-viewport-controls .msp-btn[title*="expand"] {
-        display: none !important;
-      }
     `;
     document.head.appendChild(style);
   };
@@ -724,12 +693,16 @@
       ensureMolstarScopedStyles();
       molstarViewer = await window.molstar.Viewer.create("ood-molstar-container", {
         layoutIsExpanded: false,
-        layoutShowControls: false,
+        layoutShowControls: true,
+        layoutShowSequence: true,
         layoutShowRemoteState: false,
-        layoutShowSequence: false,
-        viewportShowControls: true,
-        viewportShowExpand: false
-      });
+        layoutShowLeftPanel: false,
+        layoutShowRightPanel: false,
+        layoutShowLog: false,
+        //layoutShowSequence: false,
+        //viewportShowControls: true,
+        //viewportShowExpand: false
+      });     
       return molstarViewer;
     };
 
