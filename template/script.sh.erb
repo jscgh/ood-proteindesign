@@ -78,7 +78,6 @@ else
     chain="<%= context.target_chain %>"
     seq_method="<%= context.pdj_seq_method %>"
     pred_method="<%= context.pdj_pred_method %>"
-    rfd_contigs="<%= context.pdj_rfd_contigs %>"
     hotspots_raw="<%= context.hotspots %>"
     hotspots_clean=$(echo "${hotspots_raw}" | tr -d '[:space:]' | sed -E 's/,+/,/g; s/^,//; s/,$//')
 
@@ -108,28 +107,6 @@ else
     ndesigns="<%= context.ndesigns %>"
     nseqs="<%= context.seqs_per_design %>"
     design_length="${min_length}-${max_length}"
-
-    if [ -z "${rfd_contigs}" ]; then
-        residue_numbers=$(awk -v chain_id="${chain}" '
-            substr($0, 1, 4) == "ATOM" && substr($0, 22, 1) == chain_id {
-                res = substr($0, 23, 4)
-                gsub(/ /, "", res)
-                if (res ~ /^-?[0-9]+$/) print res
-            }
-        ' "${target}" | sort -n | uniq)
-
-        first_res=$(echo "${residue_numbers}" | head -n1)
-        last_res=$(echo "${residue_numbers}" | tail -n1)
-
-        if [ -z "${first_res}" ] || [ -z "${last_res}" ]; then
-            echo "ERROR: Could not infer residues for chain '${chain}' from input PDB '${target}'."
-            echo "Please provide RFdiffusion contigs explicitly."
-            exit 1
-        fi
-
-        rfd_contigs="[${chain}${first_res}-${last_res}/0 ${design_length}]"
-        echo "Auto-generated rfd_contigs: ${rfd_contigs}"
-    fi
 
     af2_max_pae_interaction="<%= context.af2_max_pae_interaction %>"
     af2_min_plddt_overall="<%= context.af2_min_plddt_overall %>"
@@ -170,8 +147,6 @@ else
         --af2_models "${MODEL_DIR}/af2/"
         --rfd_models "${MODEL_DIR}/rfd/"
     )
-
-    pdj_args+=(--rfd_contigs "${rfd_contigs}")
 
     if [ "${pred_method}" = "af2" ]; then
         [ -n "${af2_max_pae_interaction}" ] && pdj_args+=(--af2_max_pae_interaction "${af2_max_pae_interaction}")
