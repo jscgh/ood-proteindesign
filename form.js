@@ -711,6 +711,43 @@
       return molstarViewer;
     };
 
+    const applyMolstarCartoonWithSidechainBallAndStick = async (viewer) => {
+      const plugin = viewer && viewer.plugin;
+      const manager = plugin && plugin.managers && plugin.managers.structure && plugin.managers.structure.component;
+      const hierarchy = plugin && plugin.managers && plugin.managers.structure && plugin.managers.structure.hierarchy;
+      const reprBuilder = plugin && plugin.builders && plugin.builders.structure && plugin.builders.structure.representation;
+      const reprRegistry = plugin && plugin.representation && plugin.representation.structure && plugin.representation.structure.registry;
+      if (!manager || !hierarchy || !reprBuilder || !reprRegistry) return;
+
+      const addRepresentation = async (component, reprName, typeParams = undefined) => {
+        if (!component) return;
+        const reprType = reprRegistry.get(reprName);
+        if (!reprType) return;
+        const params = { type: reprType };
+        if (typeParams) params.typeParams = typeParams;
+        await reprBuilder.addRepresentation(component, params);
+      };
+
+      const structures =
+        (hierarchy.current && hierarchy.current.structures) ||
+        (hierarchy.selection && hierarchy.selection.structures) ||
+        [];
+      if (!Array.isArray(structures) || structures.length === 0) return;
+
+      for (const structure of structures) {
+        const components = (structure && structure.components) || [];
+        for (const component of components) {
+          await manager.removeRepresentations([component]);
+        }
+
+        const polymer = await plugin.builders.structure.tryCreateComponentStatic(structure.cell, "polymer", {
+          label: "Polymer"
+        });
+        await addRepresentation(polymer, "cartoon");
+        await addRepresentation(polymer, "ball-and-stick", { sizeFactor: 0.18, sizeAspectRatio: 0.7 });
+      }
+    };
+
     const preventMolstarButtonSubmit = () => {
       if (!molstarContainer) return;
 
@@ -778,7 +815,10 @@
 
       try {
         const viewer = await ensureMolstarViewer();
-        await viewer.loadStructureFromUrl(source.url, source.format);
+        await viewer.loadStructureFromUrl(source.url, source.format, false, {
+          label: source.label
+        });
+        await applyMolstarCartoonWithSidechainBallAndStick(viewer);
         setMolstarStatus(`Loaded ${source.label}.`);
       } catch (error) {
         setMolstarStatus(`Could not load target: ${error.message}`, true);
