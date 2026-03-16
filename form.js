@@ -570,10 +570,14 @@
       #ood-molstar-container {
         position: relative;
         width: 100%;
-        height: 420px;
-        min-height: 420px;
-        max-height: 420px;
+        height: 520px;
+        min-height: 520px;
+        max-height: 520px;
         overflow: hidden;
+      }
+
+      #ood-molstar-container .msp-layout-region-right {
+        display: none !important;
       }
     `;
     document.head.appendChild(style);
@@ -698,6 +702,7 @@
         layoutShowRemoteState: false,
         layoutShowLeftPanel: false,
         layoutShowRightPanel: false,
+        collapseRightPanel: true,
         layoutShowLog: false,
         //layoutShowSequence: false,
         //viewportShowControls: true,
