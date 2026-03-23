@@ -44,7 +44,7 @@ attributes:
             Choose which backend pipeline to run for this submission.
         options:
             - ["ProteinDJ (RFdiffusion workflow)", "proteindj", data-hide-jobconfig: true, data-hide-filterconfig: true]
-            - ["BindFlow (BindCraft workflow)", "bindflow", data-hide-seqs_per_design: true, data-hide-pdj_seq_method: true, data-hide-pdj_pred_method: true, data-hide-pdj_show_advanced: true, data-hide-pdj_advanced_heading: true, data-hide-mpnn_relax_max_cycles: true, data-hide-uncropped_target_pdb: true, data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-fold_min_ss: true, data-hide-seq_min_ext_coef: true, data-hide-max_designs: true, data-hide-max_seqs_per_fold: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
+            - ["BindFlow (BindCraft workflow)", "bindflow", data-hide-seqs_per_design: true, data-hide-pdj_seq_method: true, data-hide-pdj_pred_method: true, data-hide-pdj_show_advanced: true, data-hide-mpnn_relax_max_cycles: true, data-hide-uncropped_target_pdb: true, data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-fold_min_ss: true, data-hide-seq_min_ext_coef: true, data-hide-max_designs: true, data-hide-max_seqs_per_fold: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
 
     data_warning:
         class: "d-none"
@@ -79,6 +79,7 @@ attributes:
                 <button type="button" id="ood-molstar-load" class="btn btn-secondary btn-sm">
                     Preview Target
                 </button>
+                <div id="ood-molstar-status" style="margin-top: 0.5rem; color: #555;"></div>
                 <div id="ood-molstar-container" style="height: 420px; margin-top: 0.75rem; border: 1px solid #d0d0d0; border-radius: 0.25rem; overflow: hidden;"></div>
             </div>
 

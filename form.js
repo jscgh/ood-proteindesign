@@ -1,7 +1,6 @@
 (() => {
   const CONTEXT_PREFIX = "batch_connect_session_context";
   const PDJ_ADVANCED_HIDE_TARGETS = [
-    "pdj_advanced_heading",
     "mpnn_relax_max_cycles",
     "uncropped_target_pdb",
     "boltz_use_templates",
