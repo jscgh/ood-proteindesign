@@ -31,7 +31,7 @@ if [ "$WORKFLOW" = "bindflow" ]; then
     BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_BIND_OUT_DIR:-/srv/scratch/${USER}/bindflow_output}}"
     OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
     mkdir -p "${OUT_DIR}"
-    LIVE_LOG="${OUT_DIR}/live_log.log"
+    LIVE_LOG="live_log.log"
     if [ -z "${OOD_LIVE_LOG_INIT:-}" ]; then
         export OOD_LIVE_LOG_INIT=1
         : > "${LIVE_LOG}"
@@ -79,7 +79,7 @@ else
     BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_PDJ_OUT_DIR:-/srv/scratch/${USER}/proteindj_output}}"
     OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
     mkdir -p "${OUT_DIR}"
-    LIVE_LOG="${OUT_DIR}/live_log.log"
+    LIVE_LOG="live_log.log"
     if [ -z "${OOD_LIVE_LOG_INIT:-}" ]; then
         export OOD_LIVE_LOG_INIT=1
         : > "${LIVE_LOG}"

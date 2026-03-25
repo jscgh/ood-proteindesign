@@ -24,8 +24,8 @@ def tail_text(path, max_bytes = 65536, max_lines = 120)
   end
 end
 
-run_output_dir = File.join(base_out_dir.to_s, run_dir.to_s)
-log_path = File.join(run_output_dir, "live_log.log")
+log_dir = (defined?(session_output_dir) && session_output_dir && !session_output_dir.to_s.empty?) ? session_output_dir.to_s : File.join(base_out_dir.to_s, run_dir.to_s)
+log_path = File.join(log_dir, "live_log.log")
 log_url = file_url(results_url_base, log_path)
 log_text = tail_text(log_path)
 %>
