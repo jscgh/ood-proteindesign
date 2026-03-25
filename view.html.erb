@@ -104,9 +104,6 @@ log_text = sanitize_live_log(tail_text(log_path))
   <div class="container py-3">
     <div class="row">
       <div class="col-12">
-        <p>
-          <a href="<%= log_url %>" target="_blank" rel="noopener">Open log file</a>
-        </p>
         <pre id="ood-live-log" style="min-height: 12rem !important; max-height: 16rem !important; overflow: auto !important; padding: 1rem !important; background: #0f172a !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 0.5rem !important; white-space: pre-wrap !important; font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace !important;"><%= log_text && !log_text.empty? ? ERB::Util.html_escape(log_text) : "Waiting for log output..." %></pre>
       </div>
     </div>

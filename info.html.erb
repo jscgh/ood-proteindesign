@@ -75,20 +75,37 @@ workflow_label = connect.respond_to?(:workflow) && connect.workflow == 'bindflow
 session_output_dir = (connect.respond_to?(:session_output_dir) && !connect.session_output_dir.blank?) ? connect.session_output_dir : nil
 log_dir = session_output_dir || File.join(base_out_dir, connect.run_dir)
 log_path = File.join(log_dir, "live_log.log")
-output_log_url = file_url(results_url_base, File.join(log_dir, "output.log"))
+log_url = file_url(results_url_base, log_path)
+output_log_path = File.join(log_dir, "output.log")
+output_log_url = file_url(results_url_base, output_log_path)
+summary_log_url = File.file?(output_log_path) ? output_log_url : log_url
+summary_log_label = File.file?(output_log_path) ? "output.log" : "live_log.log"
 log_text = sanitize_live_log(tail_text(log_path))
 %>
-<b>Workflow</b>: <%= workflow_label %><br>
-<b>Results</b>: <a target="_blank" href="https://kod.restech.unsw.edu.au<%= file_url(results_url_base, File.join(base_out_dir, connect.run_dir)) %>"><%= connect.run_dir %></a><br>
-<b>Log</b>: <a target="_blank" href="https://kod.restech.unsw.edu.au<%= output_log_url %>">output.log</a>
+<div class="ood-completed-log-card">
+<b>Workflow</b>: <%= workflow_label %>
+<div><b>Results</b>: <a target="_blank" href="https://kod.restech.unsw.edu.au<%= file_url(results_url_base, File.join(base_out_dir, connect.run_dir)) %>"><%= connect.run_dir %></a></div>
+<div style="margin-top: 0.15rem;"><b>Log</b>: <a target="_blank" href="https://kod.restech.unsw.edu.au<%= summary_log_url %>"><%= summary_log_label %></a></div>
 <% if log_text && !log_text.empty? %>
 <pre class="ood-completed-log" style="margin-top: 0.75rem !important; height: 7rem !important; max-height: 7rem !important; overflow: auto !important; padding: 1rem !important; background: #0f172a !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 0.5rem !important; white-space: pre-wrap !important; font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace !important;"><%= ERB::Util.html_escape(log_text) %></pre>
 <script>
   (() => {
-    document.querySelectorAll(".ood-completed-log").forEach((logEl) => {
-      logEl.scrollTop = logEl.scrollHeight;
+    const scriptEl = document.currentScript;
+    const completedCard = scriptEl ? scriptEl.previousElementSibling : null;
+    window.requestAnimationFrame(() => {
+      document.querySelectorAll(".ood-completed-log").forEach((logEl) => {
+        logEl.scrollTop = logEl.scrollHeight;
+      });
     });
+
+    if (!completedCard) return;
+
+    const sessionCard = completedCard.closest(".card") || completedCard.closest(".panel") || completedCard.parentElement;
+    if (sessionCard && sessionCard.querySelector("#ood-live-log")) {
+      completedCard.style.display = "none";
+    }
   })();
 </script>
 <% end %>
+</div>
 <% end %>
