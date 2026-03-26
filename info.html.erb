@@ -12,7 +12,7 @@ else
   ENV["PROTEINDESIGN_PDJ_OUT_DIR"] || "/srv/scratch/#{connect.user}/proteindj_output"
 end
 base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : default_base_out_dir
-results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : (ENV["PROTEINDESIGN_RESULTS_URL_BASE"] || "/pun/sys/dashboard/files/fs")
+results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : (ENV["OOD_RESULTS_URL_BASE"] || "/pun/sys/dashboard/files/fs")
 %>
 <b>Workflow</b>: <%= workflow_label %><br>
 <b>Results</b>: <a target="_blank" rel="noopener" href="<%= file_url(results_url_base, File.join(base_out_dir, connect.run_dir)) %>"><%= connect.run_dir %></a>

@@ -15,7 +15,7 @@ else
 fi
 
 OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
-RESULTS_URL_BASE="${RESULTS_URL_BASE:-${PROTEINDESIGN_RESULTS_URL_BASE:-/pun/sys/dashboard/files/fs}}"
+RESULTS_URL_BASE="${RESULTS_URL_BASE:-${OOD_RESULTS_URL_BASE:-/pun/sys/dashboard/files/fs}}"
 
 ln -s "$OUT_DIR" 2>/dev/null || true
 
