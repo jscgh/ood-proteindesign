@@ -101,7 +101,7 @@ default_base_out_dir = if workflow_value == "bindflow"
 else
   ENV["PROTEINDESIGN_PDJ_OUT_DIR"] || "/srv/scratch/#{user}/proteindj_output"
 end
-default_results_url_base = ENV["PROTEINDESIGN_RESULTS_URL_BASE"] || "/pun/sys/dashboard/files/fs"
+default_results_url_base = ENV["OOD_RESULTS_URL_BASE"] || "/pun/sys/dashboard/files/fs"
 resolved_base_out_dir = (defined?(base_out_dir) && base_out_dir && !base_out_dir.to_s.empty?) ? base_out_dir.to_s : default_base_out_dir
 resolved_results_url_base = (defined?(results_url_base) && results_url_base && !results_url_base.to_s.empty?) ? results_url_base.to_s : default_results_url_base
 

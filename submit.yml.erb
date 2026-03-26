@@ -1,6 +1,6 @@
 <%
-cluster_name = ENV.fetch("PROTEINDESIGN_CLUSTER", "katana")
-queue_name = ENV.fetch("PROTEINDESIGN_QUEUE", "submission")
+cluster_name = ENV.fetch("OOD_CLUSTER", "katana")
+queue_name = ENV.fetch("OOD_QUEUE", "submission")
 default_native = ENV.fetch("PROTEINDESIGN_NATIVE_DEFAULT", "-A kod_proteindesign;-l select=1:ncpus=2:mem=4gb;-l walltime=48:00:00")
 
 def parse_native(val)
@@ -9,7 +9,7 @@ end
 
 native_default_list = parse_native(default_native)
 
-email_default = ENV["PROTEINDESIGN_EMAIL"] || "#{ENV['USER']}#{ENV.fetch('PROTEINDESIGN_EMAIL_DOMAIN', '@ad.unsw.edu.au')}"
+email_default = ENV["OOD_EMAIL"] || "#{ENV['USER']}#{ENV.fetch('OOD_EMAIL_DOMAIN', '@ad.unsw.edu.au')}"
 email_selected = (defined?(email) && email && !email.strip.empty?) ? email : email_default
 %>
 

@@ -25,17 +25,17 @@ Unified Open OnDemand app for protein design.
 To adapt the app for another institution:
 
 1. Copy `.env.example` to `template/.env`.
-2. Set the `PROTEINDESIGN_*` variables for your cluster, scheduler defaults, result paths, and workflow-specific pipeline locations.
+2. Set the shared `OOD_*` variables for your cluster, queue, email defaults, and results URL base, plus the `PROTEINDESIGN_*` variables for workflow-specific pipeline locations.
 3. Prefer updating `template/.env` over editing the app templates directly so local site customisations stay isolated from upstream logic.
 
 Core overrides:
 
-- `PROTEINDESIGN_CLUSTER`
-- `PROTEINDESIGN_QUEUE`
+- `OOD_CLUSTER`
+- `OOD_QUEUE`
 - `PROTEINDESIGN_NATIVE_DEFAULT`
-- `PROTEINDESIGN_EMAIL`
-- `PROTEINDESIGN_EMAIL_DOMAIN`
-- `PROTEINDESIGN_RESULTS_URL_BASE`
+- `OOD_EMAIL`
+- `OOD_EMAIL_DOMAIN`
+- `OOD_RESULTS_URL_BASE`
 - `PROTEINDESIGN_MOLSTAR_URL_TEMPLATE`
 - `PROTEINDESIGN_BIND_BASEDIR`
 - `PROTEINDESIGN_BIND_OUT_DIR`
