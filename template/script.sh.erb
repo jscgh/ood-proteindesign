@@ -21,11 +21,14 @@ export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR:-/srv/scratch/${USER}/ap
 export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf/apptainer_cache/}"
 
 if [ "$WORKFLOW" = "bindflow" ]; then
-    BASEDIR=/srv/scratch/sbf-pipelines/bindflow/
+    BASEDIR="${PROTEINDESIGN_BIND_BASEDIR:-/srv/scratch/sbf-pipelines/bindflow/}"
     JOBCONFIGDIR=${BASEDIR}/advanced/
     FILTERCONFIGDIR=${BASEDIR}/filters/
+    BIND_REPOSITORY="${PROTEINDESIGN_BIND_REPOSITORY:-Australian-Structural-Biology-Computing/bindflow}"
+    BIND_REVISION="${PROTEINDESIGN_BIND_REVISION:-93e8ac776fae1c76d283dcc64f4e4571cae7a091}"
+    BIND_NEXTFLOW_CONFIG="${PROTEINDESIGN_BIND_NEXTFLOW_CONFIG:-${BASEDIR}/kod-bindflow.config}"
 
-    export NXF_WORK="/srv/scratch/${USER}/.bindflow/work"
+    export NXF_WORK="${PROTEINDESIGN_BIND_WORK_DIR:-/srv/scratch/${USER}/.bindflow/work}"
     mkdir -p "${NXF_WORK}"
 
     BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_BIND_OUT_DIR:-/srv/scratch/${USER}/bindflow_output}}"
@@ -62,18 +65,21 @@ if [ "$WORKFLOW" = "bindflow" ]; then
         "${JOBCONFIGDIR}/${jobconfig}" \
         "${FILTERCONFIGDIR}/${filterconfig}" >> samplesheet.csv
 
-    nextflow run Australian-Structural-Biology-Computing/bindflow \
+    nextflow run "${BIND_REPOSITORY}" \
         --input samplesheet.csv \
         --outdir ${OUT_DIR} \
-        -c ${BASEDIR}/kod-bindflow.config \
+        -c "${BIND_NEXTFLOW_CONFIG}" \
         -profile apptainer \
-        -r 93e8ac776fae1c76d283dcc64f4e4571cae7a091 \
+        -r "${BIND_REVISION}" \
         -latest
 else
-    BASE_DIR=/srv/scratch/sbf-pipelines/pdj-denovo/
+    BASE_DIR="${PROTEINDESIGN_PDJ_BASEDIR:-/srv/scratch/sbf-pipelines/pdj-denovo/}"
     MODEL_DIR=${BASE_DIR}/models/
+    PDJ_REPOSITORY="${PROTEINDESIGN_PDJ_REPOSITORY:-tlitfin/proteindj}"
+    PDJ_REVISION="${PROTEINDESIGN_PDJ_REVISION:-main}"
+    PDJ_NEXTFLOW_CONFIG="${PROTEINDESIGN_PDJ_NEXTFLOW_CONFIG:-${BASE_DIR}/kod-pdj-denovo.config}"
 
-    export NXF_WORK="/srv/scratch/${USER}/.proteindj/work"
+    export NXF_WORK="${PROTEINDESIGN_PDJ_WORK_DIR:-/srv/scratch/${USER}/.proteindj/work}"
     mkdir -p "${NXF_WORK}"
 
     BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_PDJ_OUT_DIR:-/srv/scratch/${USER}/proteindj_output}}"
@@ -184,10 +190,10 @@ else
     [ -n "${max_designs}" ] && pdj_args+=(--max_designs "${max_designs}")
     [ -n "${max_seqs_per_fold}" ] && pdj_args+=(--max_seqs_per_fold "${max_seqs_per_fold}")
 
-    nextflow run tlitfin/proteindj \
+    nextflow run "${PDJ_REPOSITORY}" \
         "${pdj_args[@]}" \
-        -c ${BASE_DIR}/kod-pdj-denovo.config \
+        -c "${PDJ_NEXTFLOW_CONFIG}" \
         -profile apptainer \
-        -r main \
+        -r "${PDJ_REVISION}" \
         -latest
 fi
