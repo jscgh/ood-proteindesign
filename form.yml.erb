@@ -1,3 +1,8 @@
+<%
+portal_default_cluster = ENV.fetch("OOD_CLUSTER", "katana")
+portal_default_molstar_url_template = "/pun/sys/dashboard/files/fs/__PATH_SEGMENTS__"
+%>
+
 form:
     - workflow
     - data_warning
@@ -34,7 +39,7 @@ form:
     - citation_request
     - katana_citation
 
-cluster: "<%= ENV.fetch('OOD_CLUSTER', 'katana') %>"
+cluster: "<%= portal_default_cluster %>"
 
 attributes:
     workflow:
@@ -75,7 +80,7 @@ attributes:
         class: "d-none"
         help: |
             <div id="ood-molstar-preview"
-                 data-url-template="<%= ENV.fetch('PROTEINDESIGN_MOLSTAR_URL_TEMPLATE', '/pun/sys/dashboard/files/fs/__PATH_SEGMENTS__') %>">
+                 data-url-template="<%= ENV.fetch('PROTEINDESIGN_MOLSTAR_URL_TEMPLATE', portal_default_molstar_url_template) %>">
                 <button type="button" id="ood-molstar-load" class="btn btn-secondary btn-sm">
                     Preview Target
                 </button>
