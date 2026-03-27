@@ -1,5 +1,9 @@
 <% if !connect.user.blank? %>
 <%
+portal_default_bind_out_dir = "/srv/scratch/#{connect.user}/bindflow_output"
+portal_default_pdj_out_dir = "/srv/scratch/#{connect.user}/proteindj_output"
+portal_default_results_url_base = "/pun/sys/dashboard/files/fs"
+
 def file_url(base, path)
   encoded_path = path.to_s.split("/").reject(&:empty?).map { |segment| ERB::Util.url_encode(segment) }.join("/")
   "#{base}/#{encoded_path}"
@@ -70,12 +74,12 @@ def sanitize_live_log(text)
 end
 
 default_base_out_dir = if connect.respond_to?(:workflow) && connect.workflow == 'bindflow'
-  ENV["PROTEINDESIGN_BIND_OUT_DIR"] || "/srv/scratch/#{connect.user}/bindflow_output"
+  ENV["PROTEINDESIGN_BIND_OUT_DIR"] || portal_default_bind_out_dir
 else
-  ENV["PROTEINDESIGN_PDJ_OUT_DIR"] || "/srv/scratch/#{connect.user}/proteindj_output"
+  ENV["PROTEINDESIGN_PDJ_OUT_DIR"] || portal_default_pdj_out_dir
 end
 base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : default_base_out_dir
-results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : (ENV["OOD_RESULTS_URL_BASE"] || "/pun/sys/dashboard/files/fs")
+results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : (ENV["OOD_RESULTS_URL_BASE"] || portal_default_results_url_base)
 session_output_dir = (connect.respond_to?(:session_output_dir) && !connect.session_output_dir.blank?) ? connect.session_output_dir : nil
 log_dir = session_output_dir || File.join(base_out_dir, connect.run_dir)
 live_log_path = File.join(log_dir, "live_log.log")
