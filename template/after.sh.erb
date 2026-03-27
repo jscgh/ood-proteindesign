@@ -5,17 +5,29 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 fi
 
+require_var() {
+    local name="$1"
+    if [ -z "${!name:-}" ]; then
+        echo "ERROR: Required config variable '$name' is not set. Define it in template/.env or the environment." >&2
+        exit 1
+    fi
+}
+
+require_var OOD_RESULTS_URL_BASE
+
 RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
 WORKFLOW="<%= context.workflow %>"
 
 if [ "$WORKFLOW" = "bindflow" ]; then
-    BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_BIND_OUT_DIR:-/srv/scratch/${USER}/bindflow_output}}"
+    require_var PROTEINDESIGN_BIND_OUT_DIR
+    BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_BIND_OUT_DIR}}"
 else
-    BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_PDJ_OUT_DIR:-/srv/scratch/${USER}/proteindj_output}}"
+    require_var PROTEINDESIGN_PDJ_OUT_DIR
+    BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_PDJ_OUT_DIR}}"
 fi
 
 OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
-RESULTS_URL_BASE="${RESULTS_URL_BASE:-${OOD_RESULTS_URL_BASE:-/pun/sys/dashboard/files/fs}}"
+RESULTS_URL_BASE="${RESULTS_URL_BASE:-${OOD_RESULTS_URL_BASE}}"
 
 ln -s "$OUT_DIR" 2>/dev/null || true
 
