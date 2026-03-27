@@ -34,7 +34,7 @@ form:
     - citation_request
     - katana_citation
 
-cluster: "<%= ENV.fetch('OOD_CLUSTER', 'katana') %>"
+cluster: "<%= ENV.fetch('OOD_CLUSTER') %>"
 
 attributes:
     workflow:
@@ -66,7 +66,7 @@ attributes:
         widget: "path_selector"
         label: "Target PDB"
         pattern: "*.pdb^"
-        placeholder: "/srv/scratch/$USER/my_project/target.pdb"
+        placeholder: "/path/to/my_project/target.pdb"
         required: true
         help: |
             Path to a PDB file containing the target structure.
@@ -169,7 +169,7 @@ attributes:
         widget: "path_selector"
         label: "Uncropped Target PDB (optional)"
         pattern: "*.pdb^"
-        placeholder: "/srv/scratch/$USER/my_project/target_uncropped.pdb"
+        placeholder: "/path/to/my_project/target_uncropped.pdb"
 
     boltz_use_templates:
         widget: "select"
@@ -182,7 +182,7 @@ attributes:
         widget: "path_selector"
         label: "Boltz Input MSA (optional)"
         pattern: "*.a3m^"
-        placeholder: "/srv/scratch/$USER/my_project/target.a3m"
+        placeholder: "/path/to/my_project/target.a3m"
 
     fold_min_ss:
         widget: "number_field"
