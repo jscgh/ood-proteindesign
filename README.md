@@ -28,6 +28,12 @@ To adapt the app for another institution:
 2. Set the shared `OOD_*` variables for your cluster, queue, email defaults, and results URL base, plus the `PROTEINDESIGN_*` variables for workflow-specific pipeline locations.
 3. Prefer updating `template/.env` over editing the app templates directly so local site customisations stay isolated from upstream logic.
 
+Portal rendering and job runtime are configured differently:
+- portal-side defaults live at the top of `form.yml.erb`, `submit.yml.erb`, `info.html.erb`, `completed.html.erb`, and `view.html.erb`
+- runtime config lives in `template/.env`, which is intentionally gitignored
+
+For CI/CD, prefer generating `template/.env` during deployment from site-managed config or secrets rather than committing a real site config file to the repository.
+
 Core overrides:
 
 - `OOD_CLUSTER`
