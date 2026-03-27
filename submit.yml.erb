@@ -1,27 +1,7 @@
 <%
-unless defined?(ood_site_env_loaded)
-  env_path = [File.expand_path("template/.env", Dir.pwd), File.expand_path(".env", Dir.pwd)].find { |path| File.file?(path) }
-  if env_path
-    File.foreach(env_path) do |line|
-      stripped = line.strip
-      next if stripped.empty? || stripped.start_with?("#")
-      key, raw_value = line.split("=", 2)
-      next if raw_value.nil?
-      value = raw_value.strip
-      value = value[1..-2] if (value.start_with?('"') && value.end_with?('"')) || (value.start_with?("'") && value.end_with?("'"))
-      value = value.gsub(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/) { ENV[$1 || $2].to_s }
-      key = key.strip
-      ENV[key] = value if ENV[key].to_s.empty?
-    end
-  end
-  ood_site_env_loaded = true
-end
-%>
-
-<%
-cluster_name = ENV.fetch("OOD_CLUSTER")
-queue_name = ENV.fetch("OOD_QUEUE")
-default_native = ENV.fetch("PROTEINDESIGN_NATIVE_DEFAULT")
+cluster_name = ENV.fetch("OOD_CLUSTER", "katana")
+queue_name = ENV.fetch("OOD_QUEUE", "submission")
+default_native = ENV.fetch("PROTEINDESIGN_NATIVE_DEFAULT", "-A kod_proteindesign;-l select=1:ncpus=2:mem=4gb;-l walltime=48:00:00")
 
 def parse_native(val)
     val.split(/\s*;\s*/).reject(&:empty?)
@@ -29,7 +9,7 @@ end
 
 native_default_list = parse_native(default_native)
 
-email_default = ENV["OOD_EMAIL"] || "#{ENV['USER']}#{ENV.fetch('OOD_EMAIL_DOMAIN')}"
+email_default = ENV["OOD_EMAIL"] || "#{ENV['USER']}#{ENV.fetch('OOD_EMAIL_DOMAIN', '@ad.unsw.edu.au')}"
 email_selected = (defined?(email) && email && !email.strip.empty?) ? email : email_default
 %>
 
