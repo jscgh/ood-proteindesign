@@ -25,8 +25,9 @@ Unified Open OnDemand app for protein design.
 To adapt the app for another institution:
 
 1. Copy `.env.example` to `template/.env`.
-2. Set the shared `OOD_*` variables for your cluster, queue, email defaults, and results URL base, plus the `PROTEINDESIGN_*` variables for workflow-specific pipeline locations.
-3. Prefer updating `template/.env` over editing the app templates directly so local site customisations stay isolated from upstream logic.
+2. Set the runtime variables in `template/.env` for results URLs, caches, and workflow-specific pipeline locations.
+3. Adjust the portal-side defaults at the top of the ERB files for cluster, queue, and other pre-submit settings.
+4. Prefer updating `template/.env` over editing the app templates directly so local site customisations stay isolated from upstream logic.
 
 Portal rendering and job runtime are configured differently:
 - portal-side defaults live at the top of `form.yml.erb`, `submit.yml.erb`, `info.html.erb`, `completed.html.erb`, and `view.html.erb`
@@ -36,11 +37,7 @@ For CI/CD, prefer generating `template/.env` during deployment from site-managed
 
 Core overrides:
 
-- `OOD_CLUSTER`
-- `OOD_QUEUE`
 - `PROTEINDESIGN_NATIVE_DEFAULT`
-- `OOD_EMAIL`
-- `OOD_EMAIL_DOMAIN`
 - `OOD_RESULTS_URL_BASE`
 - `PROTEINDESIGN_MOLSTAR_URL_TEMPLATE`
 - `PROTEINDESIGN_BIND_BASEDIR`
