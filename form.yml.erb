@@ -1,5 +1,5 @@
 <%
-portal_default_cluster = ENV.fetch("OOD_CLUSTER", "katana")
+portal_default_cluster = "katana"
 portal_default_molstar_url_template = "/pun/sys/dashboard/files/fs/__PATH_SEGMENTS__"
 %>
 
@@ -80,7 +80,7 @@ attributes:
         class: "d-none"
         help: |
             <div id="ood-molstar-preview"
-                 data-url-template="<%= ENV.fetch('PROTEINDESIGN_MOLSTAR_URL_TEMPLATE', portal_default_molstar_url_template) %>">
+                 data-url-template="<%= portal_default_molstar_url_template %>">
                 <button type="button" id="ood-molstar-load" class="btn btn-secondary btn-sm">
                     Preview Target
                 </button>

@@ -101,11 +101,11 @@ end
 
 workflow_value = (defined?(workflow) && workflow && !workflow.to_s.empty?) ? workflow.to_s : "proteindj"
 default_base_out_dir = if workflow_value == "bindflow"
-  ENV["PROTEINDESIGN_BIND_OUT_DIR"] || portal_default_bind_out_dir
+  portal_default_bind_out_dir
 else
-  ENV["PROTEINDESIGN_PDJ_OUT_DIR"] || portal_default_pdj_out_dir
+  portal_default_pdj_out_dir
 end
-default_results_url_base = ENV["OOD_RESULTS_URL_BASE"] || portal_default_results_url_base
+default_results_url_base = portal_default_results_url_base
 resolved_base_out_dir = (defined?(base_out_dir) && base_out_dir && !base_out_dir.to_s.empty?) ? base_out_dir.to_s : default_base_out_dir
 resolved_results_url_base = (defined?(results_url_base) && results_url_base && !results_url_base.to_s.empty?) ? results_url_base.to_s : default_results_url_base
 
