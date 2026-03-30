@@ -4,9 +4,9 @@ portal_default_queue = "submission"
 portal_default_native = "-A kod_proteindesign;-l select=1:ncpus=2:mem=4gb;-l walltime=48:00:00"
 portal_default_email_domain = "@ad.unsw.edu.au"
 
-cluster_name = ENV.fetch("OOD_CLUSTER", portal_default_cluster)
-queue_name = ENV.fetch("OOD_QUEUE", portal_default_queue)
-default_native = ENV.fetch("PROTEINDESIGN_NATIVE_DEFAULT", portal_default_native)
+cluster_name = portal_default_cluster
+queue_name = portal_default_queue
+default_native = portal_default_native
 
 def parse_native(val)
     val.split(/\s*;\s*/).reject(&:empty?)
@@ -14,7 +14,7 @@ end
 
 native_default_list = parse_native(default_native)
 
-email_default = ENV["OOD_EMAIL"] || "#{ENV['USER']}#{ENV.fetch('OOD_EMAIL_DOMAIN', portal_default_email_domain)}"
+email_default = "#{ENV['USER']}#{portal_default_email_domain}"
 email_selected = (defined?(email) && email && !email.strip.empty?) ? email : email_default
 %>
 

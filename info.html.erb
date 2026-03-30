@@ -11,12 +11,12 @@ end
 
 workflow_label = connect.respond_to?(:workflow) && connect.workflow == 'bindflow' ? 'BindFlow' : 'ProteinDJ'
 default_base_out_dir = if connect.respond_to?(:workflow) && connect.workflow == 'bindflow'
-  ENV["PROTEINDESIGN_BIND_OUT_DIR"] || portal_default_bind_out_dir
+  portal_default_bind_out_dir
 else
-  ENV["PROTEINDESIGN_PDJ_OUT_DIR"] || portal_default_pdj_out_dir
+  portal_default_pdj_out_dir
 end
 base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : default_base_out_dir
-results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : (ENV["OOD_RESULTS_URL_BASE"] || portal_default_results_url_base)
+results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : portal_default_results_url_base
 %>
 <b>Workflow</b>: <%= workflow_label %><br>
 <b>Results</b>: <a target="_blank" rel="noopener" href="<%= file_url(results_url_base, File.join(base_out_dir, connect.run_dir)) %>"><%= connect.run_dir %></a>
