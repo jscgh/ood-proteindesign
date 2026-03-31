@@ -706,7 +706,7 @@
         //layoutShowSequence: false,
         //viewportShowControls: true,
         //viewportShowExpand: false
-      });     
+      });
       return molstarViewer;
     };
 
