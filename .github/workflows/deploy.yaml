@@ -1,0 +1,65 @@
+name: Deploy app
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.event_name }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ secrets.HOST }}
+      SSH_USER: ${{ secrets.USER }}
+      APP_PATH: ${{ secrets.APP_PATH }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set deployment target
+        run: |
+          echo "DEPLOY_TARGET=${APP_PATH}/kod-proteindesign" >> "${GITHUB_ENV}"
+          echo "DEPLOY_LABEL=production" >> "${GITHUB_ENV}"
+
+      - name: Validate deployment inputs
+        run: |
+          for required in SSH_HOST SSH_USER APP_PATH DEPLOY_TARGET; do
+            if [ -z "${!required:-}" ]; then
+              echo "Missing required value: ${required}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H -p 22 "${SSH_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Ensure remote target exists
+        run: |
+          ssh "${SSH_USER}@${SSH_HOST}" "mkdir -p '${DEPLOY_TARGET}'"
+
+      - name: Deploy app files
+        run: |
+          rsync -avz --delete \
+            --exclude ".git/" \
+            --exclude ".github/" \
+            --exclude ".pre-commit-config.yaml" \
+            --exclude "template/.env" \
+            ./ "${SSH_USER}@${SSH_HOST}:${DEPLOY_TARGET}/"
+
+      - name: Report deployment target
+        run: |
+          echo "Deployed ${DEPLOY_LABEL} to ${DEPLOY_TARGET}"
