@@ -1,6 +1,21 @@
 # ood-proteindesign
 
-Unified Open OnDemand app for protein design.
+Open OnDemand app for launching protein design workflows through a researcher-friendly web interface backed by Nextflow pipelines and institution-specific HPC configuration.
+
+## Maintainer
+
+For questions about this app or its deployment, contact @jscgh.
+
+## What This App Does
+
+- Launches protein design workflows from a web UI
+- Hides workflow complexity behind structured form inputs
+- Dispatches jobs to different Nextflow pipelines based on workflow selection
+- Separates site-specific configuration from app logic for easier portability
+
+## Why It Exists
+
+This app was built to make advanced protein design workflows easier to use for researchers who should not need to work directly with pipeline internals, scheduler settings, or environment-specific runtime details.
 
 ## Workflows
 
