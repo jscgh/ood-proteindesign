@@ -13,6 +13,80 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 fi
 
+DEBUGGROUP=${DEBUGGROUP:-sbf}
+BASE_DEBUGDIR=${BASE_DEBUGDIR:-/srv/scratch/sbf/debug}
+METRICS_DIRECTORY=${METRICS_DIRECTORY:-/srv/scratch/sbf-pipelines/metrics}
+ENABLE_METRICS=${ENABLE_METRICS:-true}
+NOW=$(date +%Y%m%d_%H%M%S)
+RUNNAME="${NOW}_${USER}"
+DEBUGDIR="${BASE_DEBUGDIR}/proteindesign_${WORKFLOW}_${RUNNAME}"
+
+collect_debug_files() {
+    local exit_code=$?
+
+    trap - ERR
+    set +e
+    echo "Error occurred, copying debug files to ${DEBUGDIR}"
+    mkdir -p "${DEBUGDIR}"
+    {
+        echo "captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "user=${USER}"
+        echo "node=$(hostname)"
+        echo "pbs_jobid=${PBS_JOBID:-}"
+        echo "workflow=${WORKFLOW}"
+        echo "run_name=<%= context.run_name %>"
+        echo "session_output_dir=$(pwd -P)"
+        echo "nxf_work=${NXF_WORK:-}"
+        echo "exit_code=${exit_code}"
+    } > "${DEBUGDIR}/debug-metadata.txt"
+    rsync -a --no-perms --no-owner --no-group --max-size=50m . "${DEBUGDIR}/"
+    if [ -n "${NXF_WORK:-}" ] && [ -d "${NXF_WORK}" ]; then
+        rsync -a --no-perms --no-owner --no-group --max-size=50m "${NXF_WORK}" "${DEBUGDIR}/"
+    fi
+    find "${DEBUGDIR}" -type d -exec chmod 2770 {} +
+    find "${DEBUGDIR}" -type f -exec chmod 660 {} +
+    chgrp "${DEBUGGROUP}" -R "${DEBUGDIR}"
+    exit "${exit_code}"
+}
+
+write_metrics() {
+    local repository="$1"
+    local revision="$2"
+    local nf_config="$3"
+    local workflow_args="$4"
+    local metrics_log_path
+
+    [[ "${ENABLE_METRICS}" == "true" ]] || return 0
+    metrics_log_path="${METRICS_DIRECTORY}/$(date +%Y/%m)"
+    if ! mkdir -p "${metrics_log_path}" || ! jq -n \
+        --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg user "$(whoami)" \
+        --arg node "$(hostname)" \
+        --arg pbs_jobid "${PBS_JOBID:-}" \
+        --arg app "ood-proteindesign" \
+        --arg workflow "${WORKFLOW}" \
+        --arg run_name "<%= context.run_name %>" \
+        --arg repository "${repository}" \
+        --arg revision "${revision}" \
+        --arg nf_config "${nf_config}" \
+        --arg target "${target}" \
+        --arg target_chain "${chain}" \
+        --arg hotspots "${hotspots}" \
+        --arg min_length "${min_length}" \
+        --arg max_length "${max_length}" \
+        --arg number_of_designs "${ndesigns}" \
+        --arg outdir "${OUT_DIR}" \
+        --arg nxf_work "${NXF_WORK}" \
+        --arg profile "apptainer" \
+        --arg args "${workflow_args}" \
+        '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, app: $app, workflow: $workflow, run_name: $run_name, repository: $repository, revision: $revision, nf_config: $nf_config, target: $target, target_chain: $target_chain, hotspots: $hotspots, min_length: $min_length, max_length: $max_length, number_of_designs: $number_of_designs, outdir: $outdir, nxf_work: $nxf_work, profile: $profile, args: $args}' \
+        > "${metrics_log_path}/$(date -u +%Y-%m-%dT%H:%M:%SZ)-$(whoami)-${PBS_JOBID:-unknown}.json"; then
+        echo "Warning: unable to write metrics log to ${metrics_log_path}; continuing without metrics." >&2
+    fi
+}
+
+trap 'collect_debug_files' ERR
+
 require_var() {
     local name="$1"
     if [ -z "${!name:-}" ]; then
@@ -82,6 +156,15 @@ if [ "$WORKFLOW" = "bindflow" ]; then
         "${ndesigns}" \
         "${JOBCONFIGDIR}/${jobconfig}" \
         "${FILTERCONFIGDIR}/${filterconfig}" >> samplesheet.csv
+
+    printf -v workflow_args '%q ' \
+        --input samplesheet.csv \
+        --outdir "${OUT_DIR}" \
+        -c "${BIND_NEXTFLOW_CONFIG}" \
+        -profile apptainer \
+        -r "${BIND_REVISION}" \
+        -latest
+    write_metrics "${BIND_REPOSITORY}" "${BIND_REVISION}" "${BIND_NEXTFLOW_CONFIG}" "${workflow_args}"
 
     nextflow run "${BIND_REPOSITORY}" \
         --input samplesheet.csv \
@@ -213,6 +296,13 @@ else
     [ -n "${seq_min_ext_coef}" ] && pdj_args+=(--seq_min_ext_coef "${seq_min_ext_coef}")
     [ -n "${max_designs}" ] && pdj_args+=(--max_designs "${max_designs}")
     [ -n "${max_seqs_per_fold}" ] && pdj_args+=(--max_seqs_per_fold "${max_seqs_per_fold}")
+
+    printf -v workflow_args '%q ' "${pdj_args[@]}" \
+        -c "${PDJ_NEXTFLOW_CONFIG}" \
+        -profile apptainer \
+        -r "${PDJ_REVISION}" \
+        -latest
+    write_metrics "${PDJ_REPOSITORY}" "${PDJ_REVISION}" "${PDJ_NEXTFLOW_CONFIG}" "${workflow_args}"
 
     nextflow run "${PDJ_REPOSITORY}" \
         "${pdj_args[@]}" \
