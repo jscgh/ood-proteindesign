@@ -67,3 +67,17 @@ Core overrides:
 - `PROTEINDESIGN_PDJ_REPOSITORY`
 - `PROTEINDESIGN_PDJ_REVISION`
 - `PROTEINDESIGN_PDJ_NEXTFLOW_CONFIG`
+- `DEBUGGROUP`: group applied recursively to failed-run captures
+- `BASE_DEBUGDIR`: parent directory for captures named `proteindesign_<workflow>_<timestamp>_<user>`
+- `ENABLE_METRICS`: set to `false` to disable launch-metadata records
+- `METRICS_DIRECTORY`: parent directory for monthly launch-metadata JSON files
+
+On failure, the job captures session files and the configured Nextflow work
+directory under `BASE_DEBUGDIR`. Each capture includes `debug-metadata.txt`
+with the job ID, host, selected workflow, session/work paths, and exit code.
+
+When enabled, metrics are written before the workflow starts. Each record is
+identified as `app: ood-proteindesign`, includes the selected `workflow`, and
+records the resolved repository, revision, config, common design inputs, and
+the backend-specific Nextflow arguments. Metrics collection is best-effort and
+does not fail a design job if the metrics directory is unavailable.
