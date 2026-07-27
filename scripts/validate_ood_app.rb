@@ -24,8 +24,6 @@ class TemplateContext
   def initialize
     @context = OpenStruct.new(
       run_name: "ci_run",
-      query_fasta: "/tmp/query.fasta",
-      target_fasta: "/tmp/target.fasta",
       workflow: "proteindj",
       target: "/tmp/target.pdb",
       target_chain: "A",
@@ -52,29 +50,15 @@ class TemplateContext
       boltz_max_rmsd_target: 2,
       boltz_max_rmsd_overall: 2,
       boltz_min_ptm_interface: 0.5,
-      samplesheet: "/tmp/samplesheet.csv",
-      af_method: "colabfold",
-      prot_mode: "monomer_ptm",
-      full_dbs: "reduced",
-      colabfold_num_recycles: 3,
-      esmfold_num_recycles: 4,
-      boltz_use_potentials: "false",
-      msa_server: "local"
+      filterconfig: "default_filters.json",
+      jobconfig: "default_4stage_multimer.json"
     )
   end
 
   def get_binding
     run_name = "ci_run"
-    af_method = "colabfold"
-    msa_server = "local"
-    workflow = "proteindj"
     email = "ci@example.com"
     email_on_terminated = false
-    base_out_dir = "/tmp/ood-results"
-    results_url_base = "/pun/sys/dashboard/files/fs"
-    run_dir = "ci_run"
-    user = "ci-user"
-    session_output_dir = "/tmp/ood-session"
     context = @context
     binding
   end
