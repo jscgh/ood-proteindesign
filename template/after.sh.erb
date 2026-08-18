@@ -16,15 +16,9 @@ require_var() {
 require_var OOD_RESULTS_URL_BASE
 
 RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
-WORKFLOW="<%= context.workflow %>"
-
-if [ "$WORKFLOW" = "bindflow" ]; then
-    require_var PROTEINDESIGN_BIND_OUT_DIR
-    BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_BIND_OUT_DIR}}"
-else
-    require_var PROTEINDESIGN_PDJ_OUT_DIR
-    BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_PDJ_OUT_DIR}}"
-fi
+WORKFLOW="proteindj"
+require_var PROTEINDESIGN_PDJ_OUT_DIR
+BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_PDJ_OUT_DIR}}"
 
 OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
 RESULTS_URL_BASE="${RESULTS_URL_BASE:-${OOD_RESULTS_URL_BASE}}"

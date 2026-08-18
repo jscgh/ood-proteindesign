@@ -5,4 +5,4 @@ subcategory: Biology
 role: batch_connect
 description: |
   <img src="https://www.analytical.unsw.edu.au/sites/default/files/styles/feature_wide/public/facility_image/SBF_0.jpg" style="max-width: 200px"/><br>
-  Unified interface for computational protein design with selectable <b>ProteinDJ</b> and <b>BindFlow</b> workflows.
+  Interface for computational protein design with the <b>ProteinDJ</b> workflow.
