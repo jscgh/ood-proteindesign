@@ -26,6 +26,13 @@ This app was built to make advanced protein design workflows easier to use for r
   AlphaFold2-to-Boltz-2 structure prediction.
 - Advanced controls are grouped into backbone, sequence-design, folding, and
   filtering sections. ProteinMPNN uses the v3 SolubleMPNN/OpenMMRelax path.
+- The target preview supports bidirectional hotspot selection: clicking
+  residues updates the hotspot field, while editing the field selects the
+  corresponding residues in Mol*.
+- Loaded target structures are checked for valid hotspot chains/residue numbers
+  and a suggestion is shown when the target exceeds 300 standard amino-acid
+  residues; larger targets remain allowed but may be less efficient. Targets
+  below 50 residues are rejected, matching SBP.
 
 ## Licensing and Compliance
 
@@ -67,12 +74,12 @@ Core overrides:
 
 On failure, the job captures session files and the configured Nextflow work
 directory under `BASE_DEBUGDIR`. Each capture includes `debug-metadata.txt`
-with the job ID, host, selected workflow, session/work paths, and exit code.
+with the job ID, host, workflow, session/work paths, and exit code.
 
 When enabled, metrics are written before the workflow starts. Each record is
-identified as `app: ood-proteindesign`, includes the selected `workflow`, and
-records the resolved repository, revision, config, common design inputs, and
-the backend-specific Nextflow arguments. Metrics collection is best-effort and
+identified as `app: ood-proteindesign` and records the resolved repository,
+revision, config, common design inputs, and Nextflow arguments. Metrics
+collection is best-effort and
 does not fail a design job if the metrics directory is unavailable.
 
 ## ProteinDJ 3 deployment
@@ -81,9 +88,9 @@ The deployed checkout is `/srv/scratch/sbf-pipelines/proteindj3`, pinned to
 the ProteinDJ `v3.0.0` release commit
 `4b7205893f0fa2544e9c8a3d19900204bab13468`. Keep that checkout
 available and readable from compute nodes.
-The launcher accepts target PDBs containing at most 150 unique standard
-amino-acid residues across all chains; oversized or unparseable targets are
-rejected before Nextflow is submitted.
+The launcher requires at least 50 unique standard amino-acid residues and warns
+when target PDBs contain more than 300 across all chains. Larger targets remain
+allowed; empty or unparseable targets are rejected before Nextflow is submitted.
 The site is configured to use the ProteinDJ `v3.0` images from
 `ghcr.io/papenfusslab/proteindj` and the
 `nextflow/25` module (currently Nextflow `25.10.4`). ProteinDJ's current

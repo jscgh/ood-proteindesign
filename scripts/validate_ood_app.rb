@@ -25,8 +25,8 @@ class TemplateContext
     @context = OpenStruct.new(
       run_name: "ci_run",
       target: "/tmp/target.pdb",
-      target_chain: "A",
-      hotspots: "10,20,30",
+      hotspots: "A10,A20,A30",
+      target_crop: "A1-60",
       pdj_design_mode: "rfd_denovo",
       minlen: 60,
       maxlen: 100,
@@ -146,6 +146,7 @@ def assert_launch_contract!(template_context)
     '--boltz_min_iptm "${boltz_min_iptm}"',
     'NXF_SYNTAX_PARSER="${NXF_SYNTAX_PARSER:-v1}"',
     'PDJ_VERSION_ARGS=()',
+    'expected_revision=$(git -C "${PDJ_REPOSITORY}" rev-parse --verify "${PDJ_REVISION}^{commit}" 2>/dev/null)',
     'PDJ_CONTAINER_REGISTRY="oras://ghcr.io/papenfusslab/proteindj"',
     'PDJ_CONTAINER_VERSION="v3.0"',
     '--container_registry "${PDJ_CONTAINER_REGISTRY}" --container_version "${PDJ_CONTAINER_VERSION}"',
@@ -153,8 +154,19 @@ def assert_launch_contract!(template_context)
     '--mpnn_checkpoint_type "${mpnn_checkpoint_type}"',
     '--mpnn_checkpoint_model "${mpnn_checkpoint_model}"',
     '--mpnn_backbone_noise "${mpnn_backbone_noise}"',
-    'max_target_residues=150',
-    'Target PDB has ${target_residue_count} amino-acid residues',
+    'min_target_residues=50',
+    'max_target_residues=300',
+    'Minimum ${min_target_residues} residues required',
+    'Warning: target structure has ${target_residue_count} amino-acid residues',
+    'declare -A target_chains=()',
+    'Hotspot chain ${hotspot_chain} is not present in target structure',
+    'Hotspot residue ${hotspot_start} not found in chain ${hotspot_chain}',
+    'End residue ${hotspot_end} not found in chain ${hotspot_chain}',
+    'target_crop_raw="A1-60"',
+    'target.cropped.pdb',
+    'Crop contains only ${target_residue_count} residue(s). Minimum ${min_target_residues} residues required.',
+    'hotspots="${hotspots_clean}"',
+    'case because chain IDs are case-sensitive',
     'module load java/21 nextflow/25'
   ]
   legacy_fragments = ["binder_denovo", "--rfd_mode ", "--rfd_num_designs", "--rfd_input_pdb", "--rfd_hotspots"]
@@ -165,11 +177,30 @@ def assert_launch_contract!(template_context)
   legacy = legacy_fragments.select { |fragment| rendered.include?(fragment) }
   abort("ProteinDJ 2 launch arguments remain: #{legacy.join(', ')}") unless legacy.empty?
 
+  abort("Hotspot chain IDs must not be uppercased") if rendered.include?('hotspots="${hotspots_clean^^}"')
+
   template_context.context.pdj_design_mode = "bindcraft_denovo"
   bindcraft_rendered = render_template(ROOT.join("template/script.sh.erb"), template_context)
   unless bindcraft_rendered.include?('design_mode="bindcraft_denovo"')
     abort("FreeBindCraft launch mode did not render correctly")
   end
+end
+
+def assert_form_contract!
+  source = File.read(ROOT.join("form.js"))
+  rendered_form = render_template(ROOT.join("form.yml.erb"), TemplateContext.new)
+  required_fragments = [
+    "const MAX_HOTSPOT_RESIDUES = 8",
+    "Too many hotspot residues selected",
+    "hotspotResidueCount",
+    "applyTargetCrop",
+    "Crop contains ${crop.count} residue(s). Minimum 50 residues required.",
+    "molstarMode === \"crop\""
+  ]
+  missing = required_fragments.reject { |fragment| source.include?(fragment) }
+  abort("Hotspot form contract is missing: #{missing.join(', ')}") unless missing.empty?
+
+  abort("Target input must remain PDB-only") if rendered_form.include?("(pdb|cif)")
 end
 
 assert_required_files!
@@ -180,6 +211,7 @@ erb_templates.each { |path| compile_erb!(path) }
 validate_yaml_file!("form.yml.erb", template_context)
 validate_yaml_file!("submit.yml.erb", template_context)
 validate_shell_templates!(template_context)
+assert_form_contract!
 assert_launch_contract!(template_context)
 
 puts "Open OnDemand app validation passed for #{ROOT.basename}"

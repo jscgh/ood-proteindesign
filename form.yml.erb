@@ -8,8 +8,11 @@ form:
     - run_name
     - target
     - target_preview
-    - target_chain
+    - target_crop
+    - target_crop_validation
+    - target_size_warning
     - hotspots
+    - hotspot_validation
     - pdj_design_mode
     - minlen
     - maxlen
@@ -89,12 +92,12 @@ attributes:
     target:
         widget: "path_selector"
         label: "Target PDB"
-        pattern: "*.pdb^"
+        pattern: ".*\\.pdb$"
         placeholder: "/path/to/my_project/target.pdb"
         required: true
         help: |
-            Path to a PDB file containing the target structure. The input PDB
-            must contain no more than 150 standard amino-acid residues in total.
+            Path to a PDB file containing the target structure. The input
+            structure must contain at least 50 standard amino-acid residues.
 
     target_preview:
         class: "d-none"
@@ -104,18 +107,45 @@ attributes:
                 <button type="button" id="ood-molstar-load" class="btn btn-secondary btn-sm">
                     Preview Target
                 </button>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Mol* selection mode" style="margin-left: 0.5rem;">
+                    <button type="button" id="ood-molstar-mode-hotspots" class="btn btn-primary">Select hotspots</button>
+                    <button type="button" id="ood-molstar-mode-crop" class="btn btn-outline-primary">Crop target</button>
+                    <button type="button" id="ood-molstar-apply-crop" class="btn btn-outline-primary" hidden>Apply crop</button>
+                    <button type="button" id="ood-molstar-clear-crop" class="btn btn-outline-secondary" hidden>Clear crop</button>
+                </div>
+                <div style="margin-top: 0.5rem; color: #555;">
+                    In hotspot mode, click residues to add or remove hotspots. In crop mode,
+                    select the residues to retain, then apply the crop. Shift-click can extend a selection.
+                </div>
+                <div id="ood-molstar-crop-summary" style="margin-top: 0.5rem; color: #555;"></div>
                 <div id="ood-molstar-status" style="margin-top: 0.5rem; color: #555;"></div>
                 <div id="ood-molstar-container" style="height: 420px; margin-top: 0.75rem; border: 1px solid #d0d0d0; border-radius: 0.25rem; overflow: hidden;"></div>
             </div>
 
-    target_chain:
-        widget: "text_field"
-        label: "Target Chain"
-        placeholder: "A"
-        pattern: "^[A-Za-z0-9]$"
-        required: true
+    target_size_warning:
+        class: "d-none"
+        label: ""
         help: |
-            Single alphanumeric character.
+            <div id="ood-target-size-warning" hidden
+                 style="padding: 0.375rem 0.75rem; background-color: #FFF3CD; border: 2px solid #856404; border-radius: 0.25rem; color: #664D03;">
+            </div>
+
+    target_crop:
+        widget: "text_field"
+        label: "Target Crop (optional)"
+        placeholder: "A120-310"
+        pattern: '^[A-Za-z0-9,\- ]*$'
+        help: |
+            In <i>Crop target</i> mode, select the residues to retain and click
+            <i>Apply crop</i>. Use chain-qualified ranges such as A120-310.
+            The original PDB is unchanged; a derived PDB is created in the job directory.
+
+    target_crop_validation:
+        class: "d-none"
+        label: ""
+        help: |
+            <div id="ood-target-crop-validation" hidden
+                 style="margin-top: 0.25rem; color: #9f1d1d;"></div>
 
     hotspots:
         widget: "text_field"
@@ -123,8 +153,17 @@ attributes:
         placeholder: "231,235 or A231,A235-240"
         pattern: '^[A-Za-z0-9,\- ]*$'
         help: |
-            Optional. Use residue numbers (the target chain is added automatically), or
+            Optional. Use residue numbers (for a single-chain target), or
             ProteinDJ residue specifications such as A231, A235-240, or A.
+            Up to 8 hotspot residues may be selected (ranges count each
+            residue).
+
+    hotspot_validation:
+        class: "d-none"
+        label: ""
+        help: |
+            <div id="ood-hotspot-validation" hidden
+                 style="margin-top: 0.25rem; color: #9f1d1d;"></div>
 
     pdj_design_mode:
         widget: "select"
@@ -246,7 +285,7 @@ attributes:
         placeholder: "A or A,B"
         pattern: '^[A-Za-z]+(,[A-Za-z]+)*$'
         help: |
-            Optional. Leave blank to target all protein chains in the PDB.
+            Optional. Leave blank to target all protein chains in the structure.
 
     bc_design_protocol:
         widget: "select"
@@ -314,8 +353,8 @@ attributes:
 
     uncropped_target_pdb:
         widget: "path_selector"
-        label: "Uncropped Target PDB (optional)"
-        pattern: "*.pdb^"
+        label: "Uncropped target PDB (optional)"
+        pattern: ".*\\.pdb$"
         placeholder: "/path/to/my_project/target_uncropped.pdb"
 
     af2_initial_guess:
@@ -335,7 +374,7 @@ attributes:
     boltz_input_msa:
         widget: "path_selector"
         label: "Boltz Input MSA (optional)"
-        pattern: "*.a3m^"
+        pattern: ".*\\.a3m$"
         placeholder: "/path/to/my_project/target.a3m"
 
     boltz_recycling_steps:
