@@ -4,16 +4,14 @@ This repository (`ood-proteindesign`) is an Open OnDemand wrapper that dispatche
 jobs to external workflow projects. It is not a bundled copy of those upstream
 codebases.
 
-## Upstream workflows used at runtime
+## Upstream workflow used at runtime
 
-- BindFlow: https://github.com/Australian-Structural-Biology-Computing/bindflow
-  - Reported license: MIT
-  - Includes a `CITATIONS.md` file with required/recommended citations.
-- ProteinDJ: https://github.com/tlitfin/proteindj
+- ProteinDJ: https://github.com/JoshuaMHardy/proteindj3
   - See upstream `LICENSE` file for terms.
   - README includes extensive citation guidance for integrated tools.
-- BindCraft (used by BindFlow): https://github.com/martinpacesa/BindCraft
-  - Reported license: MIT
+- FreeBindCraft (used by ProteinDJ's `bindcraft_denovo` mode):
+  https://github.com/PapenfussLab/FreeBindCraft
+  - ProteinDJ uses its PyRosetta-free implementation.
 
 ## UI libraries loaded at form runtime
 
@@ -23,11 +21,9 @@ codebases.
 
 ## Important downstream licensing notes
 
-- PyRosetta licensing:
-  - Upstream BindFlow/BindCraft/ProteinDJ documentation notes that PyRosetta
-    usage may require additional license permissions depending on use case,
-    especially commercial use.
-  - Users are responsible for ensuring their use complies with PyRosetta terms.
+- ProteinDJ integrates third-party tools with their own terms. Users are
+  responsible for reviewing upstream licensing and citation guidance for the
+  methods used in a campaign.
 
 ## Citation reminders presented in the UI
 

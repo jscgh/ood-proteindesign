@@ -4,53 +4,72 @@ portal_default_molstar_url_template = "/pun/sys/dashboard/files/fs/__PATH_SEGMEN
 %>
 
 form:
-    - workflow
     - data_warning
     - run_name
     - target
     - target_preview
     - target_chain
     - hotspots
+    - pdj_design_mode
     - minlen
     - maxlen
     - ndesigns
     - seqs_per_design
     - pdj_seq_method
     - pdj_pred_method
-    - pdj_show_advanced
+    - pdj_show_backbone_advanced
+    - pdj_show_sequence_advanced
+    - pdj_show_folding_advanced
+    - pdj_show_filtering_advanced
+    - flexible_residues
+    - rfd_ckpt_override
+    - rfd_noise_scale
+    - bc_chains
+    - bc_design_protocol
+    - bc_template_protocol
+    - bc_omit_aas
+    - bc_fix_interface_residues
+    - mpnn_checkpoint_type
+    - mpnn_checkpoint_model
+    - mpnn_backbone_noise
     - mpnn_relax_max_cycles
     - uncropped_target_pdb
+    - af2_initial_guess
     - boltz_use_templates
     - boltz_input_msa
+    - boltz_recycling_steps
+    - boltz_diffusion_samples
+    - boltz_sampling_steps
+    - boltz_use_potentials
+    - boltz_predict_unbound_binder
+    - zip_pdbs
+    - rank_designs
+    - ranking_metric
     - fold_min_ss
     - seq_min_ext_coef
     - max_designs
     - max_seqs_per_fold
     - af2_max_pae_interaction
+    - af2_min_iptm
     - af2_min_plddt_overall
     - af2_max_rmsd_binder_bndaln
     - af2_max_rmsd_binder_tgtaln
     - boltz_max_rmsd_binder
     - boltz_max_rmsd_target
     - boltz_max_rmsd_overall
-    - boltz_min_ptm_interface
-    - jobconfig
-    - filterconfig
+    - boltz_min_iptm
+    - boltz_min_ipsae_min
+    - boltz_min_pdockq2_min
+    - pr_min_intface_shpcomp
+    - pr_min_intface_hbonds
+    - pr_max_intface_unsat_hbonds
+    - pr_max_surfhphobics
     - citation_request
     - katana_citation
 
 cluster: "<%= portal_default_cluster %>"
 
 attributes:
-    workflow:
-        widget: "select"
-        label: "Design Workflow"
-        help: |
-            Choose which backend pipeline to run for this submission.
-        options:
-            - ["ProteinDJ (RFdiffusion workflow)", "proteindj", data-hide-jobconfig: true, data-hide-filterconfig: true]
-            - ["BindFlow (BindCraft workflow)", "bindflow", data-hide-seqs_per_design: true, data-hide-pdj_seq_method: true, data-hide-pdj_pred_method: true, data-hide-pdj_show_advanced: true, data-hide-mpnn_relax_max_cycles: true, data-hide-uncropped_target_pdb: true, data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-fold_min_ss: true, data-hide-seq_min_ext_coef: true, data-hide-max_designs: true, data-hide-max_seqs_per_fold: true, data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
-
     data_warning:
         class: "d-none"
         help: |
@@ -74,7 +93,8 @@ attributes:
         placeholder: "/path/to/my_project/target.pdb"
         required: true
         help: |
-            Path to a PDB file containing the target structure.
+            Path to a PDB file containing the target structure. The input PDB
+            must contain no more than 150 standard amino-acid residues in total.
 
     target_preview:
         class: "d-none"
@@ -100,11 +120,20 @@ attributes:
     hotspots:
         widget: "text_field"
         label: "Target Hotspots"
-        placeholder: "231,235,427,431"
-        pattern: '^[0-9, ]+$'
-        required: true
+        placeholder: "231,235 or A231,A235-240"
+        pattern: '^[A-Za-z0-9,\- ]*$'
         help: |
-            Comma-separated residue numbers (spaces allowed).
+            Optional. Use residue numbers (the target chain is added automatically), or
+            ProteinDJ residue specifications such as A231, A235-240, or A.
+
+    pdj_design_mode:
+        widget: "select"
+        label: "Backbone Design Method"
+        options:
+            - ["RFdiffusion", "rfd_denovo", data-hide-bc_chains: true, data-hide-bc_design_protocol: true, data-hide-bc_template_protocol: true, data-hide-bc_omit_aas: true, data-hide-bc_fix_interface_residues: true]
+            - ["FreeBindCraft", "bindcraft_denovo", data-hide-flexible_residues: true, data-hide-rfd_ckpt_override: true, data-hide-rfd_noise_scale: true]
+        help: |
+            FreeBindCraft is ProteinDJ's PyRosetta-free BindCraft implementation.
 
     minlen:
         widget: "number_field"
@@ -132,49 +161,169 @@ attributes:
 
     seqs_per_design:
         widget: "number_field"
-        label: "Seqs per Backbone Design (ProteinDJ only)"
+        label: "Sequences per Backbone Design"
         value: 8
         min: 1
         max: 20
 
     pdj_seq_method:
         widget: "select"
-        label: "Sequence Design Method (ProteinDJ only)"
+        label: "Sequence Design Method"
         help: |
             ProteinMPNN is generally preferred for binder quality.
         options:
-            - ["ProteinMPNN (+FastRelax path)", "mpnn"]
-            - ["FAMPNN", "fampnn", data-hide-mpnn_relax_max_cycles: true]
+            - ["Soluble ProteinMPNN (+OpenMMRelax)", "mpnn"]
+            - ["FAMPNN", "fampnn", data-hide-mpnn_checkpoint_type: true, data-hide-mpnn_checkpoint_model: true, data-hide-mpnn_backbone_noise: true, data-hide-mpnn_relax_max_cycles: true]
 
     pdj_pred_method:
         widget: "select"
-        label: "Structure Prediction Method (ProteinDJ only)"
+        label: "Structure Prediction Method"
         options:
-            - ["Boltz-2", "boltz", data-hide-af2_max_pae_interaction: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true]
-            - ["AlphaFold2 Initial Guess", "af2", data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_ptm_interface: true]
+            - ["Boltz-2", "boltz", data-hide-af2_max_pae_interaction: true, data-hide-af2_min_iptm: true, data-hide-af2_min_plddt_overall: true, data-hide-af2_max_rmsd_binder_bndaln: true, data-hide-af2_max_rmsd_binder_tgtaln: true, data-hide-af2_initial_guess: true]
+            - ["AlphaFold2 Initial Guess", "af2", data-hide-boltz_use_templates: true, data-hide-boltz_input_msa: true, data-hide-boltz_recycling_steps: true, data-hide-boltz_diffusion_samples: true, data-hide-boltz_sampling_steps: true, data-hide-boltz_use_potentials: true, data-hide-boltz_predict_unbound_binder: true, data-hide-boltz_max_rmsd_binder: true, data-hide-boltz_max_rmsd_target: true, data-hide-boltz_max_rmsd_overall: true, data-hide-boltz_min_iptm: true, data-hide-boltz_min_ipsae_min: true, data-hide-boltz_min_pdockq2_min: true]
+            - ["AlphaFold2 then Boltz-2", "af2_boltz"]
 
-    pdj_show_advanced:
+    pdj_show_backbone_advanced:
         widget: "check_box"
-        label: "Show Advanced ProteinDJ Options"
+        label: "Show Advanced Backbone Options"
         checked_value: "yes"
         unchecked_value: "no"
         help: |
-            Optional expert controls. Defaults are usually suitable.
+            Optional expert controls for the backbone-design stage.
+
+    pdj_show_sequence_advanced:
+        widget: "check_box"
+        label: "Show Advanced Sequence Design Options"
+        checked_value: "yes"
+        unchecked_value: "no"
+        help: |
+            Optional ProteinMPNN and OpenMM relaxation controls.
+
+    pdj_show_folding_advanced:
+        widget: "check_box"
+        label: "Show Advanced Folding Options"
+        checked_value: "yes"
+        unchecked_value: "no"
+        help: |
+            Optional structure-prediction controls.
+
+    pdj_show_filtering_advanced:
+        widget: "check_box"
+        label: "Show Advanced Filtering Options"
+        checked_value: "yes"
+        unchecked_value: "no"
+        help: |
+            Optional ranking and quality-filter controls.
+
+    flexible_residues:
+        widget: "text_field"
+        label: "Flexible Target Residues (RFdiffusion)"
+        placeholder: "A10-35"
+        pattern: '^[A-Za-z0-9,\- ]*$'
+        help: |
+            Optional target residues whose structure should not constrain RFdiffusion.
+
+    rfd_ckpt_override:
+        widget: "select"
+        label: "RFdiffusion Checkpoint"
+        options:
+            - ["Automatic", ""]
+            - ["Complex beta-sheet", "complex_beta"]
+            - ["Complex base", "complex_base"]
+
+    rfd_noise_scale:
+        widget: "number_field"
+        label: "RFdiffusion Noise Scale"
+        min: 0
+        max: 1
+        step: 0.1
+        help: |
+            Optional. Lower values generally trade diversity for binder success rate.
+
+    bc_chains:
+        widget: "text_field"
+        label: "FreeBindCraft Target Chains"
+        placeholder: "A or A,B"
+        pattern: '^[A-Za-z]+(,[A-Za-z]+)*$'
+        help: |
+            Optional. Leave blank to target all protein chains in the PDB.
+
+    bc_design_protocol:
+        widget: "select"
+        label: "FreeBindCraft Design Protocol"
+        options:
+            - ["Default", "default"]
+            - ["Beta-sheet", "betasheet"]
+            - ["Helical peptide", "peptide"]
+
+    bc_template_protocol:
+        widget: "select"
+        label: "FreeBindCraft Target Flexibility"
+        options:
+            - ["Default", "default"]
+            - ["Flexible", "flexible"]
+
+    bc_omit_aas:
+        widget: "text_field"
+        label: "FreeBindCraft Amino Acids to Avoid"
+        value: "C"
+        pattern: '^[A-Za-z, ]*$'
+        help: |
+            Comma-separated one-letter amino-acid codes.
+
+    bc_fix_interface_residues:
+        widget: "check_box"
+        label: "Preserve FreeBindCraft Interface Residues"
+        checked_value: "true"
+        unchecked_value: "false"
+        checked: true
+
+    mpnn_checkpoint_type:
+        widget: "select"
+        label: "ProteinMPNN Checkpoint"
+        options:
+            - ["Soluble (recommended)", "soluble"]
+            - ["Vanilla", "vanilla"]
+            - ["HyperMPNN", "hyper"]
+
+    mpnn_checkpoint_model:
+        widget: "select"
+        label: "ProteinMPNN Checkpoint Model"
+        options:
+            - ["v_48_020 (recommended)", "v_48_020"]
+            - ["v_48_002", "v_48_002"]
+            - ["v_48_010", "v_48_010"]
+            - ["v_48_030", "v_48_030"]
+
+    mpnn_backbone_noise:
+        widget: "number_field"
+        label: "ProteinMPNN Backbone Noise"
+        value: 0
+        min: 0
+        max: 1
+        step: 0.01
 
     mpnn_relax_max_cycles:
         widget: "number_field"
-        label: "FastRelax Cycles (ProteinMPNN path)"
+        label: "OpenMM Relaxation Cycles"
         value: 1
         min: 0
         max: 10
         help: |
-            Set > 0 to enable FastRelax cycles (better quality, slower runtime).
+            Set to 0 to disable ProteinMPNN-OpenMMRelax.
 
     uncropped_target_pdb:
         widget: "path_selector"
         label: "Uncropped Target PDB (optional)"
         pattern: "*.pdb^"
         placeholder: "/path/to/my_project/target_uncropped.pdb"
+
+    af2_initial_guess:
+        widget: "select"
+        label: "Use AlphaFold2 Target Initial Guess"
+        options:
+            - ["Yes", "true"]
+            - ["No", "false"]
 
     boltz_use_templates:
         widget: "select"
@@ -188,6 +337,62 @@ attributes:
         label: "Boltz Input MSA (optional)"
         pattern: "*.a3m^"
         placeholder: "/path/to/my_project/target.a3m"
+
+    boltz_recycling_steps:
+        widget: "number_field"
+        label: "Boltz Recycling Steps"
+        value: 3
+        min: 0
+        max: 20
+
+    boltz_diffusion_samples:
+        widget: "number_field"
+        label: "Boltz Diffusion Samples"
+        value: 1
+        min: 1
+        max: 10
+
+    boltz_sampling_steps:
+        widget: "number_field"
+        label: "Boltz Sampling Steps"
+        value: 200
+        min: 1
+        max: 500
+
+    boltz_use_potentials:
+        widget: "check_box"
+        label: "Use Boltz-2 Physics Potentials"
+        checked_value: "true"
+        unchecked_value: "false"
+
+    boltz_predict_unbound_binder:
+        widget: "check_box"
+        label: "Predict Unbound Binder with Boltz-2"
+        checked_value: "true"
+        unchecked_value: "false"
+
+    zip_pdbs:
+        widget: "check_box"
+        label: "Compress Final PDB Files"
+        checked_value: "true"
+        unchecked_value: "false"
+        checked: true
+
+    rank_designs:
+        widget: "check_box"
+        label: "Rank Final Designs"
+        checked_value: "true"
+        unchecked_value: "false"
+        checked: true
+
+    ranking_metric:
+        widget: "select"
+        label: "Ranking Metric"
+        options:
+            - ["Automatic for prediction method", ""]
+            - ["AF2 interface PAE", "af2_pae_interaction"]
+            - ["Boltz ipSAE minimum", "boltz_ipSAE_min"]
+            - ["Boltz interface pTM", "boltz_iptm"]
 
     fold_min_ss:
         widget: "number_field"
@@ -221,6 +426,13 @@ attributes:
         label: "AF2 max PAE interaction"
         value: 10
         min: 0
+
+    af2_min_iptm:
+        widget: "number_field"
+        label: "AF2 minimum interface pTM"
+        min: 0
+        max: 1
+        step: 0.01
 
     af2_min_plddt_overall:
         widget: "number_field"
@@ -264,48 +476,50 @@ attributes:
         min: 0
         step: 0.1
 
-    boltz_min_ptm_interface:
+    boltz_min_iptm:
         widget: "number_field"
-        label: "Boltz min pTM interface"
+        label: "Boltz min interface pTM"
         value: 0.85
         min: 0
         max: 1
         step: 0.01
 
-    jobconfig:
-        widget: "select"
-        label: "Job Configuration (BindFlow only)"
-        options:
-            - ["default_4stage_multimer.json", "default_4stage_multimer.json"]
-            - ["betasheet_4stage_multimer.json", "betasheet_4stage_multimer.json"]
-            - ["betasheet_4stage_multimer_flexible.json", "betasheet_4stage_multimer_flexible.json"]
-            - ["betasheet_4stage_multimer_flexible_hardtarget.json", "betasheet_4stage_multimer_flexible_hardtarget.json"]
-            - ["betasheet_4stage_multimer_hardtarget.json", "betasheet_4stage_multimer_hardtarget.json"]
-            - ["betasheet_4stage_multimer_mpnn.json", "betasheet_4stage_multimer_mpnn.json"]
-            - ["betasheet_4stage_multimer_mpnn_flexible.json", "betasheet_4stage_multimer_mpnn_flexible.json"]
-            - ["betasheet_4stage_multimer_mpnn_flexible_hardtarget.json", "betasheet_4stage_multimer_mpnn_flexible_hardtarget.json"]
-            - ["betasheet_4stage_multimer_mpnn_hardtarget.json", "betasheet_4stage_multimer_mpnn_hardtarget.json"]
-            - ["default_4stage_multimer_mpnn.json", "default_4stage_multimer_mpnn.json"]
-            - ["default_4stage_multimer_flexible.json", "default_4stage_multimer_flexible.json"]
-            - ["default_4stage_multimer_flexible_hardtarget.json", "default_4stage_multimer_flexible_hardtarget.json"]
-            - ["default_4stage_multimer_hardtarget.json", "default_4stage_multimer_hardtarget.json"]
-            - ["default_4stage_multimer_mpnn_flexible.json", "default_4stage_multimer_mpnn_flexible.json"]
-            - ["default_4stage_multimer_mpnn_flexible_hardtarget.json", "default_4stage_multimer_mpnn_flexible_hardtarget.json"]
-            - ["default_4stage_multimer_mpnn_hardtarget.json", "default_4stage_multimer_mpnn_hardtarget.json"]
-            - ["peptide_3stage_multimer.json", "peptide_3stage_multimer.json"]
-            - ["peptide_3stage_multimer_flexible.json", "peptide_3stage_multimer_flexible.json"]
-            - ["peptide_3stage_multimer_mpnn.json", "peptide_3stage_multimer_mpnn.json"]
-            - ["peptide_3stage_multimer_mpnn_flexible.json", "peptide_3stage_multimer_mpnn_flexible.json"]
+    boltz_min_ipsae_min:
+        widget: "number_field"
+        label: "Boltz minimum interface ipSAE"
+        min: 0
+        max: 1
+        step: 0.01
 
-    filterconfig:
-        widget: "select"
-        label: "Filter Configuration (BindFlow only)"
-        options:
-            - ["default_filters.json", "default_filters.json"]
-            - ["no_filters.json", "no_filters.json"]
-            - ["peptide_filters.json", "peptide_filters.json"]
-            - ["peptide_relaxed_filters.json", "peptide_relaxed_filters.json"]
-            - ["relaxed_filters.json", "relaxed_filters.json"]
+    boltz_min_pdockq2_min:
+        widget: "number_field"
+        label: "Boltz minimum interface pDockQ2"
+        min: 0
+        max: 1
+        step: 0.01
+
+    pr_min_intface_shpcomp:
+        widget: "number_field"
+        label: "Minimum interface shape complementarity"
+        min: 0
+        max: 1
+        step: 0.01
+
+    pr_min_intface_hbonds:
+        widget: "number_field"
+        label: "Minimum interface hydrogen bonds"
+        min: 0
+
+    pr_max_intface_unsat_hbonds:
+        widget: "number_field"
+        label: "Maximum unsatisfied interface hydrogen bonds"
+        min: 0
+
+    pr_max_surfhphobics:
+        widget: "number_field"
+        label: "Maximum surface hydrophobics (%)"
+        min: 0
+        max: 100
 
     citation_request:
         label: "Facility Citation"

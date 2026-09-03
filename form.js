@@ -1,27 +1,77 @@
 (() => {
   const CONTEXT_PREFIX = "batch_connect_session_context";
-  const PDJ_ADVANCED_HIDE_TARGETS = [
+  const BACKBONE_ADVANCED_HIDE_TARGETS = [
+    "flexible_residues",
+    "rfd_ckpt_override",
+    "rfd_noise_scale",
+    "bc_chains",
+    "bc_design_protocol",
+    "bc_template_protocol",
+    "bc_omit_aas",
+    "bc_fix_interface_residues"
+  ];
+  const SEQUENCE_ADVANCED_HIDE_TARGETS = [
+    "mpnn_checkpoint_type",
+    "mpnn_checkpoint_model",
+    "mpnn_backbone_noise",
     "mpnn_relax_max_cycles",
+    "mpnn_relax_seqs_per_cycle",
+    "mpnn_relax_output",
+    "mpnn_relax_convergence_rmsd",
+    "mpnn_relax_convergence_score",
+    "mpnn_relax_convergence_max_cycles",
+  ];
+  const FOLDING_ADVANCED_HIDE_TARGETS = [
     "uncropped_target_pdb",
+    "af2_initial_guess",
     "boltz_use_templates",
     "boltz_input_msa",
+    "boltz_recycling_steps",
+    "boltz_diffusion_samples",
+    "boltz_sampling_steps",
+    "boltz_use_potentials",
+    "boltz_predict_unbound_binder"
+  ];
+  const FILTERING_ADVANCED_HIDE_TARGETS = [
+    "zip_pdbs",
+    "rank_designs",
+    "ranking_metric",
     "fold_min_ss",
     "seq_min_ext_coef",
     "max_designs",
     "max_seqs_per_fold",
     "af2_max_pae_interaction",
+    "af2_min_iptm",
     "af2_min_plddt_overall",
     "af2_max_rmsd_binder_bndaln",
     "af2_max_rmsd_binder_tgtaln",
     "boltz_max_rmsd_binder",
     "boltz_max_rmsd_target",
     "boltz_max_rmsd_overall",
-    "boltz_min_ptm_interface"
+    "boltz_min_iptm",
+    "boltz_min_ipsae_min",
+    "boltz_min_pdockq2_min",
+    "pr_min_intface_shpcomp",
+    "pr_min_intface_hbonds",
+    "pr_max_intface_unsat_hbonds",
+    "pr_max_surfhphobics"
   ];
   const CHECKBOX_HIDE_RULES = {
-    pdj_show_advanced: {
+    pdj_show_backbone_advanced: {
       hideWhenChecked: new Set(),
-      hideWhenUnchecked: new Set(PDJ_ADVANCED_HIDE_TARGETS)
+      hideWhenUnchecked: new Set(BACKBONE_ADVANCED_HIDE_TARGETS)
+    },
+    pdj_show_sequence_advanced: {
+      hideWhenChecked: new Set(),
+      hideWhenUnchecked: new Set(SEQUENCE_ADVANCED_HIDE_TARGETS)
+    },
+    pdj_show_folding_advanced: {
+      hideWhenChecked: new Set(),
+      hideWhenUnchecked: new Set(FOLDING_ADVANCED_HIDE_TARGETS)
+    },
+    pdj_show_filtering_advanced: {
+      hideWhenChecked: new Set(),
+      hideWhenUnchecked: new Set(FILTERING_ADVANCED_HIDE_TARGETS)
     }
   };
 
