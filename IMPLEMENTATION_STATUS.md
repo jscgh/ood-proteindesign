@@ -9,6 +9,9 @@ Updated: 2026-03-10
 - [x] Unified numeric hotspots input
 - [x] ProteinDJ hotspot chain-prefix conversion (numeric -> chain+index)
 - [x] Defensive hotspot handling (avoid double-prefixing existing chain-form inputs)
+- [x] Bidirectional Mol* hotspot selection and text-field synchronization
+- [x] PDB-aware hotspot validation against loaded chains and residue numbers
+- [x] Target-size validation: minimum 50 residues; advisory suggestion over 300
 - [x] Exposed ProteinDJ 3 binder-design controls
   - [x] `num_designs` / `seqs_per_design`
   - [x] `input_pdb`
@@ -44,7 +47,7 @@ Updated: 2026-03-10
 - [x] Added serial AlphaFold2-to-Boltz prediction option
 - [ ] Add runtime/cost estimator hinting in form UI
 - [ ] Add contig preview/helper UI
-- [ ] Add structure-assisted hotspot picker UI
+- [x] Add structure-assisted hotspot picker UI
 - [ ] Add dry-run or stub validation mode for safer preflight checks
 - [ ] Add regression test checklist for the 2 canonical paths:
   - [ ] ProteinDJ + AF2

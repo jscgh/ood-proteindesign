@@ -56,6 +56,11 @@
     "pr_max_intface_unsat_hbonds",
     "pr_max_surfhphobics"
   ];
+  const MAX_HOTSPOT_RESIDUES = 8;
+  const STANDARD_AMINO_ACIDS = new Set([
+    "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+    "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL"
+  ]);
   const CHECKBOX_HIDE_RULES = {
     pdj_show_backbone_advanced: {
       hideWhenChecked: new Set(),
@@ -314,10 +319,7 @@
 
   const findFieldContainer = (name) => {
     const input = findInput(name);
-    if (input) {
-      const parentGroup = input.closest(".form-group, .form-item, .control-group");
-      if (parentGroup) return parentGroup;
-    }
+    if (input) return getFieldContainer(input);
 
     return (
       document.querySelector(`#batch_connect_session_context_${name}_field`) ||
@@ -628,6 +630,19 @@
       #ood-molstar-container .msp-layout-region-right {
         display: none !important;
       }
+
+      #ood-molstar-preview .btn-group {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+      }
+
+      @media (max-width: 576px) {
+        #ood-molstar-preview .btn-group {
+          display: flex;
+          margin: 0.5rem 0 0 !important;
+        }
+      }
     `;
     document.head.appendChild(style);
   };
@@ -638,11 +653,11 @@
     if (molstarAssetsPromise) return molstarAssetsPromise;
 
     molstarAssetsPromise = Promise.all([
-      loadStylesheetOnce("ood-molstar-css", "https://cdn.jsdelivr.net/npm/molstar@4/build/viewer/molstar.css"),
-      loadScriptOnce("ood-molstar-js", "https://cdn.jsdelivr.net/npm/molstar@4/build/viewer/molstar.js")
+      loadStylesheetOnce("ood-molstar-css", "https://cdn.jsdelivr.net/npm/molstar@5.11.0/build/viewer/molstar.css"),
+      loadScriptOnce("ood-molstar-js", "https://cdn.jsdelivr.net/npm/molstar@5.11.0/build/viewer/molstar.js")
     ]).then(() => {
-      if (!window.molstar || !window.molstar.Viewer) {
-        throw new Error("Mol* loaded but Viewer API was not found.");
+      if (!window.molstar || !window.molstar.Viewer || !window.molstar.lib) {
+        throw new Error("Mol* loaded but its structure-selection API was not found.");
       }
     });
 
@@ -682,6 +697,7 @@
     const maxlenInput = findInput("maxlen");
 
     const hotspotsInput = findInput("hotspots");
+    const targetCropInput = findInput("target_crop");
     const jobconfigInput = findInput("jobconfig");
     const filterconfigInput = findInput("filterconfig");
 
@@ -691,11 +707,27 @@
     const molstarPreviewRoot = document.getElementById("ood-molstar-preview");
     const molstarStatus = document.getElementById("ood-molstar-status");
     const molstarLoadButton = document.getElementById("ood-molstar-load");
+    const molstarHotspotsModeButton = document.getElementById("ood-molstar-mode-hotspots");
+    const molstarCropModeButton = document.getElementById("ood-molstar-mode-crop");
+    const molstarApplyCropButton = document.getElementById("ood-molstar-apply-crop");
+    const molstarClearCropButton = document.getElementById("ood-molstar-clear-crop");
+    const molstarCropSummary = document.getElementById("ood-molstar-crop-summary");
     const molstarContainer = document.getElementById("ood-molstar-container");
+    const targetSizeWarning = document.getElementById("ood-target-size-warning");
+    const hotspotValidation = document.getElementById("ood-hotspot-validation");
+    const targetCropValidation = document.getElementById("ood-target-crop-validation");
     const molstarUrlTemplate = molstarPreviewRoot
       ? (molstarPreviewRoot.getAttribute("data-url-template") || "").trim()
       : "";
     let molstarViewer = null;
+    let loadedResiduesByChain = null;
+    let loadedResidueCount = 0;
+    let sourceResiduesByChain = null;
+    let sourceResidueCount = 0;
+    let cropIsApplied = false;
+    let molstarMode = "hotspots";
+    let applyingMolstarSelection = false;
+    let selectionReleaseTimer = null;
 
     let filterConfigTouched = false;
 
@@ -753,11 +785,417 @@
         layoutShowRightPanel: false,
         collapseRightPanel: true,
         layoutShowLog: false,
+        viewportShowSelectionMode: true,
         //layoutShowSequence: false,
         //viewportShowControls: true,
         //viewportShowExpand: false
       });
+      try {
+        molstarViewer.plugin.managers.interactivity.setProps({ granularity: "residue" });
+      } catch (error) {
+        console.warn("Mol* residue selection granularity unavailable", error);
+      }
+      try {
+        // Mol* otherwise starts in camera/focus mode, where a primary click
+        // does not behave as a residue hotspot picker.
+        molstarViewer.plugin.selectionMode = true;
+      } catch (error) {
+        console.warn("Mol* selection mode unavailable", error);
+      }
+      const selectionChanged = molstarViewer.plugin.managers.structure.selection?.events?.changed;
+      const syncSelection = () => {
+        if (applyingMolstarSelection) return;
+        requestAnimationFrame(() => {
+          if (applyingMolstarSelection) return;
+          if (molstarMode === "crop") syncCropFromMolstar();
+          else syncHotspotsFromMolstar();
+          validateLoadedTargetAndHotspots();
+        });
+      };
+      selectionChanged?.subscribe(syncSelection);
+      molstarViewer.plugin.behaviors.interaction.click.subscribe((event) => {
+        if (event && event.button !== undefined && event.button !== 0) return;
+        syncSelection();
+      });
       return molstarViewer;
+    };
+
+    const parseHotspotTokens = (value) => {
+      const tokens = [];
+      String(value || "").split(",").forEach((rawToken) => {
+        const token = rawToken.trim();
+        if (!token) return;
+
+        const chainOnly = token.match(/^([A-Za-z]+)$/);
+        if (chainOnly) {
+          tokens.push({ chain: chainOnly[1], start: null, end: null, text: chainOnly[1] });
+          return;
+        }
+
+        const residue = token.match(/^(?:([A-Za-z]+)?)([0-9]+)(?:-([0-9]+))?$/);
+        if (!residue) return;
+        const chain = residue[1] || null;
+        const start = Number(residue[2]);
+        const end = residue[3] ? Number(residue[3]) : start;
+        if (end < start) return;
+        tokens.push({
+          chain,
+          start,
+          end,
+          text: `${chain || ""}${start}${end === start ? "" : `-${end}`}`
+        });
+      });
+      return tokens;
+    };
+
+    const residueMapForTokens = (value, residuesByChain, { requireChain = false } = {}) => {
+      const rawParts = String(value || "").split(",").map((token) => token.trim());
+      const tokens = parseHotspotTokens(value);
+      if ((String(value || "").trim() && rawParts.some((token) => !token)) ||
+          rawParts.filter(Boolean).length !== tokens.length) {
+        return { error: "Invalid residue format. Use A120 or A120-310.", residuesByChain: new Map(), count: 0 };
+      }
+      const selected = new Map();
+      for (const token of tokens) {
+        if (token.start === null || (requireChain && !token.chain)) {
+          return { error: "Crop ranges must include a chain, for example A120-310.", residuesByChain: new Map(), count: 0 };
+        }
+        const chain = token.chain || (residuesByChain?.size === 1 ? [...residuesByChain.keys()][0] : null);
+        const available = chain && residuesByChain?.get(chain);
+        if (!available) {
+          return { error: token.chain
+            ? `Chain ${token.chain} is not present in the target structure.`
+            : "Numeric residue ranges require a single-chain target.", residuesByChain: new Map(), count: 0 };
+        }
+        if (!available.has(token.start) || !available.has(token.end)) {
+          return { error: `Crop range ${token.text} is not present in the target structure.`, residuesByChain: new Map(), count: 0 };
+        }
+        if (!selected.has(chain)) selected.set(chain, new Set());
+        available.forEach((residue) => {
+          if (residue >= token.start && residue <= token.end) selected.get(chain).add(residue);
+        });
+      }
+      return {
+        error: "",
+        residuesByChain: selected,
+        count: [...selected.values()].reduce((count, residues) => count + residues.size, 0)
+      };
+    };
+
+    const cropSelection = () => residueMapForTokens(targetCropInput?.value, sourceResiduesByChain, { requireChain: true });
+
+    const updateCropSummary = (message = "", isError = false) => {
+      if (!molstarCropSummary) return;
+      molstarCropSummary.textContent = message;
+      molstarCropSummary.style.color = isError ? "#9f1d1d" : "#555";
+    };
+
+    const updateMolstarMode = (mode) => {
+      molstarMode = mode;
+      const cropMode = mode === "crop";
+      if (molstarHotspotsModeButton) {
+        molstarHotspotsModeButton.className = `btn btn-${cropMode ? "outline-primary" : "primary"}`;
+      }
+      if (molstarCropModeButton) {
+        molstarCropModeButton.className = `btn btn-${cropMode ? "primary" : "outline-primary"}`;
+      }
+      if (targetCropInput) {
+        const container = findFieldContainer("target_crop");
+        setVisible(container, cropMode || cropIsApplied);
+      }
+      if (molstarApplyCropButton) molstarApplyCropButton.hidden = !cropMode;
+      if (molstarClearCropButton) molstarClearCropButton.hidden = !cropIsApplied;
+      if (molstarViewer) syncMolstarSelection();
+      updateCropSummary(cropMode
+        ? "Crop mode: select the residues to retain, then click Apply crop."
+        : cropIsApplied
+        ? `Crop applied: ${loadedResidueCount} residues will be used for this job.`
+        : "Hotspot mode: select residues to design against.");
+    };
+
+    const setValidationMessage = (element, message) => {
+      if (!element) return;
+      element.textContent = message;
+      element.hidden = !message;
+      const container = element.closest(".form-group, .mb-3, .form-item, .control-group");
+      if (container) {
+        const label = container.querySelector("label");
+        if (label) label.hidden = true;
+        if (message) {
+          container.hidden = false;
+          container.classList.remove("d-none");
+          container.style.removeProperty("display");
+        } else {
+          setVisible(container, false);
+        }
+      }
+    };
+
+    const getLoadedResidues = (data) => {
+      const structure = window.molstar.lib?.structure;
+      const structureElement = structure?.StructureElement;
+      const properties = structure?.StructureProperties;
+      if (!data || !structureElement?.Location || !properties) return null;
+
+      const residuesByChain = new Map();
+      const location = structureElement.Location.create(data);
+
+      data.units.forEach((unit) => {
+        const elements = unit.polymerElements || unit.elements || [];
+        location.unit = unit;
+        elements.forEach((element) => {
+          location.element = element;
+          const residueName = properties.residue.label_comp_id(location) ||
+            properties.residue.auth_comp_id?.(location);
+          if (!residueName || !STANDARD_AMINO_ACIDS.has(String(residueName).toUpperCase())) return;
+
+          const chain = properties.chain.auth_asym_id(location) ||
+            properties.chain.label_asym_id(location);
+          const residue = properties.residue.auth_seq_id(location) ??
+            properties.residue.label_seq_id(location);
+          if (!chain || residue === undefined || residue === null) return;
+          if (!residuesByChain.has(chain)) residuesByChain.set(chain, new Set());
+          residuesByChain.get(chain).add(Number(residue));
+        });
+      });
+
+      return {
+        residuesByChain,
+        residueCount: [...residuesByChain.values()].reduce((count, residues) => count + residues.size, 0)
+      };
+    };
+
+    const validateLoadedTargetAndHotspots = () => {
+      if (!targetInput) return;
+
+      const minTargetResidues = 50;
+      const maxTargetResidues = 300;
+      // A preview is optional. Do not turn an unloaded structure into a
+      // spurious zero-residue validation error; the launch script validates
+      // the submitted PDB regardless of whether it was previewed.
+      if (loadedResiduesByChain !== null) {
+        const targetTooSmall = loadedResidueCount < minTargetResidues;
+        const targetTooLarge = loadedResidueCount > maxTargetResidues;
+        targetInput.setCustomValidity(targetTooSmall
+          ? `Structure has only ${loadedResidueCount} residue(s). Minimum ${minTargetResidues} residues required.`
+          : "");
+        setValidationMessage(
+          targetSizeWarning,
+          targetTooSmall
+            ? `Structure has only ${loadedResidueCount} residue(s). Minimum ${minTargetResidues} residues required.`
+            : targetTooLarge
+            ? `Suggestion: this target contains ${loadedResidueCount} standard amino-acid residues. It's recommended to keep targets below ${maxTargetResidues} residues.`
+            : ""
+        );
+        if (targetSizeWarning) {
+          const isError = targetTooSmall;
+          targetSizeWarning.style.backgroundColor = isError ? "#F8D7DA" : "#FFF3CD";
+          targetSizeWarning.style.borderColor = isError ? "#842029" : "#664D03";
+          targetSizeWarning.style.color = isError ? "#842029" : "#664D03";
+        }
+      } else {
+        targetInput.setCustomValidity("");
+        setValidationMessage(targetSizeWarning, "");
+      }
+
+      if (targetCropInput) {
+        let cropError = "";
+        if (targetCropInput.value.trim() && sourceResiduesByChain) {
+          const crop = cropSelection();
+          cropError = crop.error || (crop.count < minTargetResidues
+            ? `Crop contains ${crop.count} residue(s). Minimum ${minTargetResidues} residues required.`
+            : "");
+          if (!cropError) {
+            updateCropSummary(cropIsApplied
+              ? `Crop applied: ${crop.count} residues will be used for this job.`
+              : `Crop selection: ${crop.count} residues. Click Apply crop to use it.`);
+          }
+        }
+        targetCropInput.setCustomValidity(cropError);
+        setValidationMessage(targetCropValidation, cropError);
+      }
+
+      if (!hotspotsInput) return;
+      const rawParts = hotspotsInput.value.split(",").map((token) => token.trim());
+      const rawTokens = rawParts.filter(Boolean);
+      const parsedTokens = parseHotspotTokens(hotspotsInput.value);
+      let hotspotError = "";
+      if (
+        (hotspotsInput.value.trim() && rawTokens.length !== rawParts.length) ||
+        rawTokens.length !== parsedTokens.length
+      ) {
+        hotspotError = "Invalid hotspot format. Use 231, A231, or A231-240.";
+      }
+
+      // Match SBP's limit. Ranges count each residue, while a bare chain can
+      // only be counted once the target has been loaded and its residues are
+      // known.
+      const hotspotResidueCount = parsedTokens.reduce((count, token) => {
+        if (token.start === null) {
+          if (!loadedResiduesByChain) return count;
+          const chain = loadedResiduesByChain.get(token.chain);
+          return count + (chain ? chain.size : 0);
+        }
+        return count + token.end - token.start + 1;
+      }, 0);
+      if (!hotspotError && hotspotResidueCount > MAX_HOTSPOT_RESIDUES) {
+        hotspotError = `Too many hotspot residues selected (${hotspotResidueCount}). Only up to ${MAX_HOTSPOT_RESIDUES} are supported.`;
+      }
+
+      if (!loadedResiduesByChain) {
+        hotspotsInput.setCustomValidity(hotspotError);
+        setValidationMessage(hotspotValidation, hotspotError);
+        return;
+      }
+
+      for (const token of parsedTokens) {
+        if (hotspotError) break;
+        const hotspotChain = token.chain ||
+          (loadedResiduesByChain.size === 1 ? [...loadedResiduesByChain.keys()][0] : null);
+        const chainResidues = hotspotChain
+          ? loadedResiduesByChain.get(hotspotChain)
+          : null;
+        if (!chainResidues) {
+          hotspotError = token.chain
+            ? `Hotspot chain ${token.chain} is not present in the target structure.`
+            : "Numeric hotspots require a single-chain target; include the chain, for example A231.";
+          break;
+        }
+        if (token.start !== null) {
+          if (!chainResidues.has(token.start)) {
+            hotspotError = token.start === token.end
+              ? `Hotspot residue ${token.start} not found in chain "${hotspotChain}".`
+              : `Residue ${token.start} not found in chain "${hotspotChain}".`;
+          } else if (token.start !== token.end && !chainResidues.has(token.end)) {
+            hotspotError = `End residue ${token.end} not found in chain "${hotspotChain}".`;
+          }
+        }
+      }
+
+      hotspotsInput.setCustomValidity(hotspotError);
+      setValidationMessage(hotspotValidation, hotspotError);
+    };
+
+    const syncInputFromMolstar = (input) => {
+      if (!molstarViewer || !input) return;
+      const data = molstarViewer.plugin.managers.structure.hierarchy.current.structures[0]?.cell.obj?.data;
+      const selection = data && molstarViewer.plugin.managers.structure.selection?.getLoci(data);
+      const structureElement = window.molstar.lib?.structure?.StructureElement;
+      const properties = window.molstar.lib?.structure?.StructureProperties;
+      if (!selection || !structureElement?.Loci?.is(selection) || !properties) return;
+
+      const residuesByChain = new Map();
+      structureElement.Loci.forEachLocation(selection, (location) => {
+        const chain = properties.chain.auth_asym_id(location) || properties.chain.label_asym_id(location);
+        const residue = properties.residue.auth_seq_id(location) ?? properties.residue.label_seq_id(location);
+        if (!chain || residue === undefined || residue === null) return;
+        if (!residuesByChain.has(chain)) residuesByChain.set(chain, new Set());
+        residuesByChain.get(chain).add(Number(residue));
+      });
+
+      const tokens = [];
+      residuesByChain.forEach((residues, chain) => {
+        const sorted = [...residues].sort((a, b) => a - b);
+        let start = null;
+        let previous = null;
+        sorted.forEach((residue) => {
+          if (start === null) start = residue;
+          else if (residue !== previous + 1) {
+            tokens.push(`${chain}${start}${previous === start ? "" : `-${previous}`}`);
+            start = residue;
+          }
+          previous = residue;
+        });
+        if (start !== null) tokens.push(`${chain}${start}${previous === start ? "" : `-${previous}`}`);
+      });
+      input.value = tokens.join(",");
+      const selectionKind = input === targetCropInput ? "crop" : "hotspot";
+      const residueCount = [...residuesByChain.values()].reduce(
+        (count, residues) => count + residues.size,
+        0
+      );
+      const rangeLabel = `${tokens.length} ${selectionKind} range${tokens.length === 1 ? "" : "s"}`;
+      setMolstarStatus(tokens.length
+        ? `Selected ${residueCount} ${selectionKind} residue${residueCount === 1 ? "" : "s"} (${rangeLabel}) in the preview.`
+        : `Cleared ${selectionKind}s in the preview.`);
+    };
+
+    const syncHotspotsFromMolstar = () => syncInputFromMolstar(hotspotsInput);
+    const syncCropFromMolstar = () => syncInputFromMolstar(targetCropInput);
+
+    const syncMolstarSelection = () => {
+      const input = molstarMode === "crop" ? targetCropInput : hotspotsInput;
+      const residueMap = molstarMode === "crop" ? sourceResiduesByChain : loadedResiduesByChain;
+      if (!molstarViewer || !input) return;
+      const data = molstarViewer.plugin.managers.structure.hierarchy.current.structures[0]?.cell.obj?.data;
+      const lib = window.molstar.lib;
+      const selectionManager = molstarViewer.plugin.managers.interactivity?.lociSelects;
+      if (!data || !lib || !lib.structure || !selectionManager) return;
+
+      const { StructureElement, StructureProperties } = lib.structure;
+      if (!StructureElement || !StructureElement.Loci || !StructureProperties) return;
+
+      applyingMolstarSelection = true;
+      try {
+        selectionManager.deselectAll();
+        let matchedTokens = 0;
+        const matchedResidues = new Set();
+        const tokens = parseHotspotTokens(input.value);
+        tokens.forEach((token) => {
+          const hotspotChain = token.chain ||
+            (residueMap?.size === 1 ? [...residueMap.keys()][0] : null);
+          if (!hotspotChain) return;
+          // A lone chain letter is kept as text while the user is typing. It
+          // must not expand into every residue and overwrite the field.
+          if (token.start === null) return;
+
+          let tokenLoci = null;
+          let residuesToSelect;
+          if (residueMap?.has(hotspotChain)) {
+            residuesToSelect = [...residueMap.get(hotspotChain)]
+              .filter((residue) => residue >= token.start && residue <= token.end)
+              .sort((a, b) => a - b);
+          } else {
+            const rangeLength = token.end - token.start + 1;
+            if (rangeLength > 10000) return;
+            residuesToSelect = Array.from(
+              { length: rangeLength },
+              (_, index) => token.start + index
+            );
+          }
+
+          for (const residue of residuesToSelect) {
+            const loci = StructureElement.Loci.fromSchema(data, {
+              auth_asym_id: hotspotChain,
+              auth_seq_id: residue
+            });
+            if (StructureElement.Loci.isEmpty(loci)) continue;
+            matchedResidues.add(`${hotspotChain}:${residue}`);
+            tokenLoci = tokenLoci
+              ? StructureElement.Loci.union(tokenLoci, loci)
+              : loci;
+          }
+          if (tokenLoci && !StructureElement.Loci.isEmpty(tokenLoci)) {
+            matchedTokens += 1;
+            selectionManager.select({ loci: tokenLoci });
+          }
+        });
+        if (tokens.length > 0) {
+          const selectionKind = molstarMode === "crop" ? "crop" : "hotspot";
+          setMolstarStatus(
+            `Selected ${matchedResidues.size} ${selectionKind} residue${matchedResidues.size === 1 ? "" : "s"} ` +
+            `(${matchedTokens} ${selectionKind} range${matchedTokens === 1 ? "" : "s"}) in the preview.`
+          );
+        }
+      } finally {
+        // Mol* publishes the selection change asynchronously. Keep its echo
+        // from replacing the text currently being edited.
+        if (selectionReleaseTimer) clearTimeout(selectionReleaseTimer);
+        selectionReleaseTimer = setTimeout(() => {
+          applyingMolstarSelection = false;
+          selectionReleaseTimer = null;
+        }, 120);
+      }
     };
 
     const applyMolstarCartoonWithSidechainBallAndStick = async (viewer) => {
@@ -795,6 +1233,27 @@
         await addRepresentation(polymer, "cartoon");
         await addRepresentation(polymer, "ball-and-stick", { sizeFactor: 0.18, sizeAspectRatio: 0.7 });
       }
+    };
+
+    const applyMolstarCropRepresentation = async () => {
+      const plugin = molstarViewer?.plugin;
+      const hierarchy = plugin?.managers?.structure?.hierarchy;
+      const componentManager = plugin?.managers?.structure?.component;
+      // Component references are populated by Mol*'s hierarchy manager after
+      // the representation transaction completes, so wait for that update.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const structures = [
+        ...(hierarchy?.selection?.structures || []),
+        ...(hierarchy?.current?.structures || [])
+      ];
+      const components = Array.from(new Map(
+        structures.flatMap((structure) => (structure?.components || []))
+          .map((component) => [component.cell?.transform?.ref, component])
+      ).values());
+      if (!plugin || !componentManager || !components.length) {
+        throw new Error("Mol* crop representation API is unavailable.");
+      }
+      await componentManager.modifyByCurrentSelection(components, "intersect");
     };
 
     const preventMolstarButtonSubmit = () => {
@@ -864,16 +1323,90 @@
 
       try {
         const viewer = await ensureMolstarViewer();
+        // A crop changes Mol* components rather than replacing the source
+        // structure. Always clear before loading so clearing a crop leaves no
+        // stale cropped component that can interfere with the next crop.
+        await viewer.plugin.clear();
+        loadedResiduesByChain = null;
+        loadedResidueCount = 0;
         await viewer.loadStructureFromUrl(source.url, source.format, false, {
           label: source.label
         });
+        const data = viewer.plugin.managers.structure.hierarchy.current.structures[0]?.cell.obj?.data;
+        const loadedResidues = getLoadedResidues(data);
+        sourceResiduesByChain = loadedResidues?.residuesByChain || null;
+        sourceResidueCount = loadedResidues?.residueCount || 0;
+        loadedResiduesByChain = sourceResiduesByChain;
+        loadedResidueCount = sourceResidueCount;
         await applyMolstarCartoonWithSidechainBallAndStick(viewer);
+        try {
+          syncMolstarSelection();
+          validateLoadedTargetAndHotspots();
+        } catch (error) {
+          console.error("Mol* hotspot selection failed", error);
+          setMolstarStatus(`Hotspot selection failed: ${error.message}`, true);
+        }
+        validateLoadedTargetAndHotspots();
         setMolstarStatus(`Loaded ${source.label}.`);
       } catch (error) {
         setMolstarStatus(`Could not load target: ${error.message}`, true);
       } finally {
         if (molstarLoadButton) molstarLoadButton.disabled = false;
       }
+    };
+
+    const applyTargetCrop = async () => {
+      if (!targetCropInput || !sourceResiduesByChain) {
+        updateCropSummary("Preview the target before applying a crop.", true);
+        return;
+      }
+      const crop = cropSelection();
+      const message = crop.error || (!crop.count
+        ? "Select residues to retain before applying a crop."
+        : crop.count < 50
+        ? `Crop contains ${crop.count} residue(s). Minimum 50 residues required.`
+        : "");
+      if (message) {
+        targetCropInput.setCustomValidity(message);
+        setValidationMessage(targetCropValidation, message);
+        updateCropSummary(message, true);
+        return;
+      }
+      cropIsApplied = true;
+      loadedResiduesByChain = crop.residuesByChain;
+      loadedResidueCount = crop.count;
+      validateLoadedTargetAndHotspots();
+      let cropPreviewError = null;
+      try {
+        molstarMode = "crop";
+        syncMolstarSelection();
+        await applyMolstarCropRepresentation();
+      } catch (error) {
+        console.error("Mol* crop representation failed", error);
+        cropPreviewError = error;
+      }
+      updateMolstarMode("hotspots");
+      setMolstarStatus(cropPreviewError
+        ? `Crop will be applied to the job, but the preview could not be cropped: ${cropPreviewError.message}`
+        : `Crop applied: ${crop.count} residues are shown and will be written to a derived PDB for this job.`,
+        Boolean(cropPreviewError));
+    };
+
+    const clearTargetCrop = async () => {
+      if (targetCropInput) targetCropInput.value = "";
+      cropIsApplied = false;
+      loadedResiduesByChain = sourceResiduesByChain;
+      loadedResidueCount = sourceResidueCount;
+      if (molstarViewer) {
+        try {
+          await loadMolstarTarget();
+        } catch (error) {
+          console.error("Mol* crop reset failed", error);
+        }
+      }
+      validateLoadedTargetAndHotspots();
+      updateMolstarMode("hotspots");
+      setMolstarStatus("Crop cleared; the original target will be used.");
     };
 
     const validateLengths = () => {
@@ -935,14 +1468,21 @@
     }
 
     if (targetInput) {
-      targetInput.addEventListener("input", () => {
+      const resetTarget = () => {
+        loadedResiduesByChain = null;
+        loadedResidueCount = 0;
+        sourceResiduesByChain = null;
+        sourceResidueCount = 0;
+        cropIsApplied = false;
+        if (targetCropInput) targetCropInput.value = "";
+        targetInput.setCustomValidity("");
+        setValidationMessage(targetSizeWarning, "");
+        validateLoadedTargetAndHotspots();
         updateWarningVisibility();
         updateCitationVisibility();
-      });
-      targetInput.addEventListener("change", () => {
-        updateWarningVisibility();
-        updateCitationVisibility();
-      });
+      };
+      targetInput.addEventListener("input", resetTarget);
+      targetInput.addEventListener("change", resetTarget);
       updateWarningVisibility();
       updateCitationVisibility();
     }
@@ -951,16 +1491,51 @@
       molstarLoadButton.addEventListener("click", loadMolstarTarget);
     }
 
+    if (molstarHotspotsModeButton) {
+      molstarHotspotsModeButton.addEventListener("click", () => updateMolstarMode("hotspots"));
+    }
+    if (molstarCropModeButton) {
+      molstarCropModeButton.addEventListener("click", () => updateMolstarMode("crop"));
+    }
+    if (molstarApplyCropButton) {
+      molstarApplyCropButton.addEventListener("click", applyTargetCrop);
+    }
+    if (molstarClearCropButton) {
+      molstarClearCropButton.addEventListener("click", clearTargetCrop);
+    }
+
     preventMolstarButtonSubmit();
 
     if (hotspotsInput) {
+      const syncHotspotsFromInput = () => {
+        try {
+          syncMolstarSelection();
+          validateLoadedTargetAndHotspots();
+        } catch (error) {
+          console.error("Mol* hotspot selection failed", error);
+          setMolstarStatus(`Hotspot selection failed: ${error.message}`, true);
+        }
+      };
+
+      hotspotsInput.addEventListener("input", syncHotspotsFromInput);
+      hotspotsInput.addEventListener("change", syncHotspotsFromInput);
       hotspotsInput.addEventListener("blur", () => {
         hotspotsInput.value = hotspotsInput.value
           .split(",")
           .map((value) => value.trim())
           .filter((value) => value.length > 0)
           .join(",");
+        syncHotspotsFromInput();
       });
+    }
+
+    if (targetCropInput) {
+      const syncCropFromInput = () => {
+        if (molstarMode === "crop") syncMolstarSelection();
+        validateLoadedTargetAndHotspots();
+      };
+      targetCropInput.addEventListener("input", syncCropFromInput);
+      targetCropInput.addEventListener("change", syncCropFromInput);
     }
 
     if (jobconfigInput) {
@@ -974,6 +1549,7 @@
     }
 
     initDynamicHide();
+    updateMolstarMode("hotspots");
     updateFilterPreset();
   });
 

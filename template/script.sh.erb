@@ -70,7 +70,6 @@ write_metrics() {
         --arg revision "${revision}" \
         --arg nf_config "${nf_config}" \
         --arg target "${target}" \
-        --arg target_chain "${chain}" \
         --arg hotspots "${hotspots}" \
         --arg min_length "${min_length}" \
         --arg max_length "${max_length}" \
@@ -79,7 +78,7 @@ write_metrics() {
         --arg nxf_work "${NXF_WORK}" \
         --arg profile "apptainer" \
         --arg args "${workflow_args}" \
-        '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, app: $app, workflow: $workflow, run_name: $run_name, repository: $repository, revision: $revision, nf_config: $nf_config, target: $target, target_chain: $target_chain, hotspots: $hotspots, min_length: $min_length, max_length: $max_length, number_of_designs: $number_of_designs, outdir: $outdir, nxf_work: $nxf_work, profile: $profile, args: $args}' \
+        '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, app: $app, workflow: $workflow, run_name: $run_name, repository: $repository, revision: $revision, nf_config: $nf_config, target: $target, hotspots: $hotspots, min_length: $min_length, max_length: $max_length, number_of_designs: $number_of_designs, outdir: $outdir, nxf_work: $nxf_work, profile: $profile, args: $args}' \
         > "${metrics_log_path}/$(date -u +%Y-%m-%dT%H:%M:%SZ)-$(whoami)-${PBS_JOBID:-unknown}.json"; then
         echo "Warning: unable to write metrics log to ${metrics_log_path}; continuing without metrics." >&2
     fi
@@ -131,8 +130,12 @@ export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR}"
     if [ -d "${PDJ_REPOSITORY}" ]; then
         if [ -d "${PDJ_REPOSITORY}/.git" ] && command -v git >/dev/null 2>&1; then
             actual_revision=$(git -C "${PDJ_REPOSITORY}" rev-parse HEAD)
-            if [ -n "${PDJ_REVISION}" ] && [ "${actual_revision}" != "${PDJ_REVISION}" ]; then
-                echo "ERROR: ProteinDJ checkout ${PDJ_REPOSITORY} is at ${actual_revision}, expected ${PDJ_REVISION}." >&2
+            if ! expected_revision=$(git -C "${PDJ_REPOSITORY}" rev-parse --verify "${PDJ_REVISION}^{commit}" 2>/dev/null); then
+                echo "ERROR: ProteinDJ revision ${PDJ_REVISION} does not exist in ${PDJ_REPOSITORY}." >&2
+                exit 1
+            fi
+            if [ "${actual_revision}" != "${expected_revision}" ]; then
+                echo "ERROR: ProteinDJ checkout ${PDJ_REPOSITORY} is at ${actual_revision}, expected ${PDJ_REVISION} (${expected_revision})." >&2
                 exit 1
             fi
         fi
@@ -156,41 +159,113 @@ export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR}"
 
     run_name="<%= context.run_name %>"
     target="<%= context.target %>"
-    # ProteinDJ uses uppercase chain identifiers in residue specifications.
-    # Normalize user input here because the form accepts lowercase letters.
-    chain="<%= context.target_chain %>"
-    chain="${chain^^}"
-
     # Keep the interactive design target compact enough for the configured
     # workflow/resources. Count unique standard amino-acid residues across all
-    # chains and reject oversized or unparseable PDB inputs before submission.
-    max_target_residues=150
-    target_residue_count=$(awk '
-        BEGIN {
-            split("ALA ARG ASN ASP CYS GLN GLU GLY HIS ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL", aa)
-            for (i in aa) allowed[aa[i]] = 1
-            count = 0
-        }
-        /^ATOM  / {
-            residue = substr($0, 18, 3)
-            if (!allowed[residue]) next
-            chain_id = substr($0, 22, 1)
-            residue_id = substr($0, 23, 4)
-            insertion = substr($0, 27, 1)
-            key = chain_id ":" residue_id ":" insertion
-            if (!seen[key]++) count++
-        }
-        END { print count }
-    ' "${target}")
-    if ! [[ "${target_residue_count}" =~ ^[0-9]+$ ]] || [ "${target_residue_count}" -eq 0 ]; then
+    # chains and warn about oversized, but still allowed, PDB inputs.
+    min_target_residues=50
+    max_target_residues=300
+    declare -A target_chains=()
+    declare -A target_residues=()
+    declare -A target_residue_keys=()
+
+    load_target_residues() {
+        target_chains=()
+        target_residues=()
+        target_residue_keys=()
+        while IFS='|' read -r residue_chain residue_number residue_field insertion; do
+            [ -z "${residue_chain}" ] && continue
+            target_residue_keys["${residue_chain}:${residue_field}:${insertion}"]=1
+            target_chains["${residue_chain}"]=1
+            target_residues["${residue_chain}:${residue_number}"]=1
+        done < <(awk '
+            BEGIN {
+                split("ALA ARG ASN ASP CYS GLN GLU GLY HIS ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL", aa)
+                for (i in aa) allowed[aa[i]] = 1
+            }
+            /^ATOM  / {
+                residue = substr($0, 18, 3)
+                if (!allowed[residue]) next
+                chain_id = substr($0, 22, 1)
+                residue_field = substr($0, 23, 4)
+                insertion = substr($0, 27, 1)
+                key = chain_id ":" residue_field ":" insertion
+                if (!seen[key]++) print chain_id "|" (residue_field + 0) "|" residue_field "|" insertion
+            }
+        ' "${target}")
+        target_residue_count=${#target_residue_keys[@]}
+    }
+
+    load_target_residues
+    if [ "${target_residue_count}" -eq 0 ]; then
         echo "Target PDB contains no parseable standard amino-acid residues: ${target}" >&2
         exit 1
     fi
-    if [ "${target_residue_count}" -gt "${max_target_residues}" ]; then
-        echo "Target PDB has ${target_residue_count} amino-acid residues; the maximum is ${max_target_residues}." >&2
+    if [ "${target_residue_count}" -lt "${min_target_residues}" ]; then
+        echo "Structure has only ${target_residue_count} residue(s). Minimum ${min_target_residues} residues required." >&2
         exit 1
     fi
-    echo "Validated target PDB: ${target_residue_count} amino-acid residues (maximum ${max_target_residues})."
+    if [ "${target_residue_count}" -gt "${max_target_residues}" ]; then
+        echo "Warning: target structure has ${target_residue_count} amino-acid residues; targets above ${max_target_residues} may be less efficient but are allowed." >&2
+    else
+        echo "Validated target structure: ${target_residue_count} amino-acid residues (suggested maximum ${max_target_residues})."
+    fi
+
+    # An optional Mol* crop is represented as chain-qualified residue ranges.
+    # Keep the submitted target read-only and write the derived PDB beside the
+    # job script; ProteinDJ receives the derived path below.
+    target_crop_raw="<%= context.target_crop %>"
+    target_crop=$(echo "${target_crop_raw}" | tr -d '[:space:]')
+    if [ -n "${target_crop}" ]; then
+        declare -A crop_residues=()
+        IFS=',' read -r -a crop_items <<< "${target_crop}"
+        for item in "${crop_items[@]}"; do
+            if [[ ! "${item}" =~ ^([A-Za-z]+)([0-9]+)(-([0-9]+))?$ ]]; then
+                echo "Invalid crop range: ${item}. Use a chain-qualified range such as A120-310." >&2
+                exit 1
+            fi
+            crop_chain="${BASH_REMATCH[1]}"
+            crop_start=$((10#${BASH_REMATCH[2]}))
+            crop_end="${BASH_REMATCH[4]:-${crop_start}}"
+            crop_end=$((10#${crop_end}))
+            if [ "${crop_end}" -lt "${crop_start}" ]; then
+                echo "Crop range has a descending end: ${item}" >&2
+                exit 1
+            fi
+            if [ -z "${target_chains[${crop_chain}]+x}" ]; then
+                echo "Crop chain ${crop_chain} is not present in target structure: ${item}" >&2
+                exit 1
+            fi
+            if [ -z "${target_residues[${crop_chain}:${crop_start}]+x}" ] ||
+               [ -z "${target_residues[${crop_chain}:${crop_end}]+x}" ]; then
+                echo "Crop range is not present in target structure: ${item}" >&2
+                exit 1
+            fi
+            for ((crop_residue = crop_start; crop_residue <= crop_end; crop_residue++)); do
+                if [ -n "${target_residues[${crop_chain}:${crop_residue}]+x}" ]; then
+                    crop_residues["${crop_chain}:${crop_residue}"]=1
+                fi
+            done
+        done
+
+        cropped_target="${PWD}/target.cropped.pdb"
+        printf '%s\n' "${!crop_residues[@]}" | awk '
+            NR == FNR { wanted[$0] = 1; next }
+            /^ATOM  / {
+                chain_id = substr($0, 22, 1)
+                residue_id = substr($0, 23, 4) + 0
+                if (wanted[chain_id ":" residue_id]) print
+            }
+            END { print "END" }
+        ' - "${target}" > "${cropped_target}"
+        target="${cropped_target}"
+
+        load_target_residues
+        if [ "${target_residue_count}" -lt "${min_target_residues}" ]; then
+            echo "Crop contains only ${target_residue_count} residue(s). Minimum ${min_target_residues} residues required." >&2
+            exit 1
+        fi
+        echo "Created derived cropped target: ${target_residue_count} amino-acid residues at ${target}."
+    fi
 
     design_mode="<%= context.pdj_design_mode %>"
     seq_method="<%= context.pdj_seq_method %>"
@@ -198,27 +273,65 @@ export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR}"
     hotspots_raw="<%= context.hotspots %>"
     hotspots_clean=$(echo "${hotspots_raw}" | tr -d '[:space:]' | sed -E 's/,+/,/g; s/^,//; s/,$//')
 
-    # ProteinDJ expects chain-prefixed hotspots (e.g. A231). We accept numeric
-    # input and defensively avoid double-prefixing if a chain was provided.
-    hotspots=""
-    IFS=',' read -r -a hotspot_items <<< "${hotspots_clean}"
-    for item in "${hotspot_items[@]}"; do
-        [ -z "${item}" ] && continue
+    # Mol* supplies chain-qualified hotspots directly; preserve PDB chain-ID
+    # case because chain IDs are case-sensitive. Numeric legacy input is still
+    # accepted when the target contains exactly one chain.
+    hotspots="${hotspots_clean}"
+    if [ -n "${hotspots}" ]; then
+        IFS=',' read -r -a hotspot_items <<< "${hotspots}"
+        normalized_hotspots=""
+        for item in "${hotspot_items[@]}"; do
+            if [[ "${item}" =~ ^([A-Za-z]+)$ ]]; then
+                hotspot_chain="${BASH_REMATCH[1]}"
+                if [ -z "${target_chains[${hotspot_chain}]+x}" ]; then
+                    echo "Hotspot chain ${hotspot_chain} is not present in target structure: ${item}" >&2
+                    exit 1
+                fi
+                normalized_item="${hotspot_chain}"
+            else
+                if [[ "${item}" =~ ^([0-9]+)(-([0-9]+))?$ ]]; then
+                    if [ "${#target_chains[@]}" -ne 1 ]; then
+                        echo "Numeric hotspot ${item} is ambiguous for a multi-chain target; include its chain." >&2
+                        exit 1
+                    fi
+                    for hotspot_chain in "${!target_chains[@]}"; do break; done
+                    hotspot_start=$((10#${BASH_REMATCH[1]}))
+                    hotspot_end=$((10#${BASH_REMATCH[3]:-${hotspot_start}}))
+                elif [[ "${item}" =~ ^([A-Za-z]+)([0-9]+)(-([0-9]+))?$ ]]; then
+                    hotspot_chain="${BASH_REMATCH[1]}"
+                    hotspot_start=$((10#${BASH_REMATCH[2]}))
+                    hotspot_end=$((10#${BASH_REMATCH[4]:-${hotspot_start}}))
+                else
+                    echo "Invalid chain-qualified hotspot: ${item}" >&2
+                    exit 1
+                fi
 
-        if [[ "${item}" =~ ^[0-9]+(-[0-9]+)?$ ]]; then
-            formatted="${chain}${item}"
-        elif [[ "${item}" =~ ^[A-Za-z]([0-9]+(-[0-9]+)?)?$ ]]; then
-            formatted="${item^^}"
-        else
-            formatted="${item}"
-        fi
+                if [ -z "${target_chains[${hotspot_chain}]+x}" ]; then
+                    echo "Hotspot chain ${hotspot_chain} is not present in target structure: ${item}" >&2
+                    exit 1
+                fi
+                if [ "${hotspot_end}" -lt "${hotspot_start}" ]; then
+                    echo "Hotspot range has a descending end: ${item}" >&2
+                    exit 1
+                fi
+                if [ -z "${target_residues[${hotspot_chain}:${hotspot_start}]+x}" ]; then
+                    echo "Hotspot residue ${hotspot_start} not found in chain ${hotspot_chain}: ${item}" >&2
+                    exit 1
+                fi
+                if [ "${hotspot_start}" -ne "${hotspot_end}" ] && [ -z "${target_residues[${hotspot_chain}:${hotspot_end}]+x}" ]; then
+                    echo "End residue ${hotspot_end} not found in chain ${hotspot_chain}: ${item}" >&2
+                    exit 1
+                fi
+                normalized_item="${hotspot_chain}${hotspot_start}"
+                if [ "${hotspot_end}" -ne "${hotspot_start}" ]; then
+                    normalized_item+="-${hotspot_end}"
+                fi
+            fi
 
-        if [ -n "${hotspots}" ]; then
-            hotspots="${hotspots},${formatted}"
-        else
-            hotspots="${formatted}"
-        fi
-    done
+            normalized_hotspots+="${normalized_hotspots:+,}${normalized_item}"
+        done
+        hotspots="${normalized_hotspots}"
+    fi
     min_length="<%= context.minlen %>"
     max_length="<%= context.maxlen %>"
     ndesigns="<%= context.ndesigns %>"
