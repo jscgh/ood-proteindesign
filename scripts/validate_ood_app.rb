@@ -24,16 +24,19 @@ class TemplateContext
   def initialize
     @context = OpenStruct.new(
       run_name: "ci_run",
-      workflow: "proteindj",
       target: "/tmp/target.pdb",
       target_chain: "A",
       hotspots: "10,20,30",
+      pdj_design_mode: "rfd_denovo",
       minlen: 60,
       maxlen: 100,
       ndesigns: 10,
       seqs_per_design: 4,
       pdj_seq_method: "mpnn",
       pdj_pred_method: "boltz",
+      mpnn_checkpoint_type: "soluble",
+      mpnn_checkpoint_model: "v_48_020",
+      mpnn_backbone_noise: 0,
       mpnn_relax_max_cycles: 1,
       uncropped_target_pdb: "",
       boltz_use_templates: "false",
@@ -43,15 +46,37 @@ class TemplateContext
       max_designs: 10,
       max_seqs_per_fold: 2,
       af2_max_pae_interaction: 10,
+      af2_min_iptm: "",
       af2_min_plddt_overall: 70,
       af2_max_rmsd_binder_bndaln: 2,
       af2_max_rmsd_binder_tgtaln: 2,
       boltz_max_rmsd_binder: 2,
       boltz_max_rmsd_target: 2,
       boltz_max_rmsd_overall: 2,
-      boltz_min_ptm_interface: 0.5,
-      filterconfig: "default_filters.json",
-      jobconfig: "default_4stage_multimer.json"
+      boltz_min_iptm: 0.5,
+      boltz_min_ipsae_min: "",
+      boltz_min_pdockq2_min: "",
+      pr_min_intface_shpcomp: "",
+      pr_min_intface_hbonds: "",
+      pr_max_intface_unsat_hbonds: "",
+      pr_max_surfhphobics: "",
+      flexible_residues: "",
+      rfd_ckpt_override: "",
+      rfd_noise_scale: "",
+      bc_chains: "",
+      bc_design_protocol: "default",
+      bc_template_protocol: "default",
+      bc_omit_aas: "C",
+      bc_fix_interface_residues: "true",
+      af2_initial_guess: "true",
+      boltz_recycling_steps: 3,
+      boltz_diffusion_samples: 1,
+      boltz_sampling_steps: 200,
+      boltz_use_potentials: "false",
+      boltz_predict_unbound_binder: "false",
+      zip_pdbs: "true",
+      rank_designs: "true",
+      ranking_metric: ""
     )
   end
 
@@ -111,6 +136,42 @@ def validate_shell_templates!(template_context)
   end
 end
 
+def assert_launch_contract!(template_context)
+  rendered = render_template(ROOT.join("template/script.sh.erb"), template_context)
+  required_fragments = [
+    'design_mode="rfd_denovo"',
+    '--design_mode "${design_mode}"',
+    '--hotspot_residues "${hotspots}"',
+    '--bc_design_protocol "${bc_design_protocol}"',
+    '--boltz_min_iptm "${boltz_min_iptm}"',
+    'NXF_SYNTAX_PARSER="${NXF_SYNTAX_PARSER:-v1}"',
+    'PDJ_VERSION_ARGS=()',
+    'PDJ_CONTAINER_REGISTRY="oras://ghcr.io/papenfusslab/proteindj"',
+    'PDJ_CONTAINER_VERSION="v3.0"',
+    '--container_registry "${PDJ_CONTAINER_REGISTRY}" --container_version "${PDJ_CONTAINER_VERSION}"',
+    '--mpnn_models "${MODEL_DIR}/mpnn/"',
+    '--mpnn_checkpoint_type "${mpnn_checkpoint_type}"',
+    '--mpnn_checkpoint_model "${mpnn_checkpoint_model}"',
+    '--mpnn_backbone_noise "${mpnn_backbone_noise}"',
+    'max_target_residues=150',
+    'Target PDB has ${target_residue_count} amino-acid residues',
+    'module load java/21 nextflow/25'
+  ]
+  legacy_fragments = ["binder_denovo", "--rfd_mode ", "--rfd_num_designs", "--rfd_input_pdb", "--rfd_hotspots"]
+
+  missing = required_fragments.reject { |fragment| rendered.include?(fragment) }
+  abort("ProteinDJ 3 launch contract is missing: #{missing.join(', ')}") unless missing.empty?
+
+  legacy = legacy_fragments.select { |fragment| rendered.include?(fragment) }
+  abort("ProteinDJ 2 launch arguments remain: #{legacy.join(', ')}") unless legacy.empty?
+
+  template_context.context.pdj_design_mode = "bindcraft_denovo"
+  bindcraft_rendered = render_template(ROOT.join("template/script.sh.erb"), template_context)
+  unless bindcraft_rendered.include?('design_mode="bindcraft_denovo"')
+    abort("FreeBindCraft launch mode did not render correctly")
+  end
+end
+
 assert_required_files!
 validate_manifest!
 
@@ -119,5 +180,6 @@ erb_templates.each { |path| compile_erb!(path) }
 validate_yaml_file!("form.yml.erb", template_context)
 validate_yaml_file!("submit.yml.erb", template_context)
 validate_shell_templates!(template_context)
+assert_launch_contract!(template_context)
 
 puts "Open OnDemand app validation passed for #{ROOT.basename}"

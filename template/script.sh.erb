@@ -3,7 +3,7 @@
 set -xo pipefail
 set -eE
 
-WORKFLOW="<%= context.workflow %>"
+WORKFLOW="proteindj"
 RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
 
 ENV_FILE=".env"
@@ -100,80 +100,15 @@ require_var NXF_APPTAINER_CACHEDIR
 require_var NXF_APPTAINER_LIBRARYDIR
 
 module purge
-module load java/21 nextflow/24
+module load java/21 nextflow/25
+
+# ProteinDJ 3 requires the legacy parser when sites upgrade to Nextflow 26+.
+export NXF_SYNTAX_PARSER="${NXF_SYNTAX_PARSER:-v1}"
 
 export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR}"
 export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR}"
 export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR}"
 
-if [ "$WORKFLOW" = "bindflow" ]; then
-    require_var PROTEINDESIGN_BIND_BASEDIR
-    require_var PROTEINDESIGN_BIND_REPOSITORY
-    require_var PROTEINDESIGN_BIND_REVISION
-    require_var PROTEINDESIGN_BIND_NEXTFLOW_CONFIG
-    require_var PROTEINDESIGN_BIND_WORK_DIR
-    require_var PROTEINDESIGN_BIND_OUT_DIR
-    BASEDIR="${PROTEINDESIGN_BIND_BASEDIR}"
-    JOBCONFIGDIR=${BASEDIR}/advanced/
-    FILTERCONFIGDIR=${BASEDIR}/filters/
-    BIND_REPOSITORY="${PROTEINDESIGN_BIND_REPOSITORY}"
-    BIND_REVISION="${PROTEINDESIGN_BIND_REVISION}"
-    BIND_NEXTFLOW_CONFIG="${PROTEINDESIGN_BIND_NEXTFLOW_CONFIG}"
-
-    export NXF_WORK="${PROTEINDESIGN_BIND_WORK_DIR}"
-    mkdir -p "${NXF_WORK}"
-
-    BASE_OUT_DIR="${BASE_OUT_DIR:-${PROTEINDESIGN_BIND_OUT_DIR}}"
-    OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
-    mkdir -p "${OUT_DIR}"
-    LIVE_LOG="live_log.log"
-    if [ -z "${OOD_LIVE_LOG_INIT:-}" ]; then
-        export OOD_LIVE_LOG_INIT=1
-        : > "${LIVE_LOG}"
-        exec > >(tee -a "${LIVE_LOG}")
-        exec 2>&1
-    fi
-
-    run_name="<%= context.run_name %>"
-    target="<%= context.target %>"
-    chain="<%= context.target_chain %>"
-    hotspots="<%= context.hotspots %>"
-    min_length="<%= context.minlen %>"
-    max_length="<%= context.maxlen %>"
-    ndesigns="<%= context.ndesigns %>"
-    jobconfig="<%= context.jobconfig %>"
-    filterconfig="<%= context.filterconfig %>"
-
-    echo "id,binder_name,starting_pdb,chains,target_hotspot_residues,min_length,max_length,number_of_final_designs,settings_advanced,settings_filters" > samplesheet.csv
-    printf '"%s","%s","%s","%s","%s",%s,%s,%s,"%s","%s"\n' \
-        "${run_name}" \
-        "${run_name}" \
-        "${target}" \
-        "${chain}" \
-        "${hotspots}" \
-        "${min_length}" \
-        "${max_length}" \
-        "${ndesigns}" \
-        "${JOBCONFIGDIR}/${jobconfig}" \
-        "${FILTERCONFIGDIR}/${filterconfig}" >> samplesheet.csv
-
-    printf -v workflow_args '%q ' \
-        --input samplesheet.csv \
-        --outdir "${OUT_DIR}" \
-        -c "${BIND_NEXTFLOW_CONFIG}" \
-        -profile apptainer \
-        -r "${BIND_REVISION}" \
-        -latest
-    write_metrics "${BIND_REPOSITORY}" "${BIND_REVISION}" "${BIND_NEXTFLOW_CONFIG}" "${workflow_args}"
-
-    nextflow run "${BIND_REPOSITORY}" \
-        --input samplesheet.csv \
-        --outdir ${OUT_DIR} \
-        -c "${BIND_NEXTFLOW_CONFIG}" \
-        -profile apptainer \
-        -r "${BIND_REVISION}" \
-        -latest
-else
     require_var PROTEINDESIGN_PDJ_BASEDIR
     require_var PROTEINDESIGN_PDJ_REPOSITORY
     require_var PROTEINDESIGN_PDJ_REVISION
@@ -185,6 +120,25 @@ else
     PDJ_REPOSITORY="${PROTEINDESIGN_PDJ_REPOSITORY}"
     PDJ_REVISION="${PROTEINDESIGN_PDJ_REVISION}"
     PDJ_NEXTFLOW_CONFIG="${PROTEINDESIGN_PDJ_NEXTFLOW_CONFIG}"
+    # Keep the container set aligned with the pinned ProteinDJ3 deployment.
+    # These are application compatibility settings, not per-site overrides.
+    PDJ_CONTAINER_REGISTRY="oras://ghcr.io/papenfusslab/proteindj"
+    PDJ_CONTAINER_VERSION="v3.0"
+
+    # Local Nextflow scripts cannot be selected with -r. Validate the pin
+    # directly when the deployment points at a Git checkout instead.
+    PDJ_VERSION_ARGS=()
+    if [ -d "${PDJ_REPOSITORY}" ]; then
+        if [ -d "${PDJ_REPOSITORY}/.git" ] && command -v git >/dev/null 2>&1; then
+            actual_revision=$(git -C "${PDJ_REPOSITORY}" rev-parse HEAD)
+            if [ -n "${PDJ_REVISION}" ] && [ "${actual_revision}" != "${PDJ_REVISION}" ]; then
+                echo "ERROR: ProteinDJ checkout ${PDJ_REPOSITORY} is at ${actual_revision}, expected ${PDJ_REVISION}." >&2
+                exit 1
+            fi
+        fi
+    else
+        PDJ_VERSION_ARGS=(-r "${PDJ_REVISION}" -latest)
+    fi
 
     export NXF_WORK="${PROTEINDESIGN_PDJ_WORK_DIR}"
     mkdir -p "${NXF_WORK}"
@@ -202,7 +156,43 @@ else
 
     run_name="<%= context.run_name %>"
     target="<%= context.target %>"
+    # ProteinDJ uses uppercase chain identifiers in residue specifications.
+    # Normalize user input here because the form accepts lowercase letters.
     chain="<%= context.target_chain %>"
+    chain="${chain^^}"
+
+    # Keep the interactive design target compact enough for the configured
+    # workflow/resources. Count unique standard amino-acid residues across all
+    # chains and reject oversized or unparseable PDB inputs before submission.
+    max_target_residues=150
+    target_residue_count=$(awk '
+        BEGIN {
+            split("ALA ARG ASN ASP CYS GLN GLU GLY HIS ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL", aa)
+            for (i in aa) allowed[aa[i]] = 1
+            count = 0
+        }
+        /^ATOM  / {
+            residue = substr($0, 18, 3)
+            if (!allowed[residue]) next
+            chain_id = substr($0, 22, 1)
+            residue_id = substr($0, 23, 4)
+            insertion = substr($0, 27, 1)
+            key = chain_id ":" residue_id ":" insertion
+            if (!seen[key]++) count++
+        }
+        END { print count }
+    ' "${target}")
+    if ! [[ "${target_residue_count}" =~ ^[0-9]+$ ]] || [ "${target_residue_count}" -eq 0 ]; then
+        echo "Target PDB contains no parseable standard amino-acid residues: ${target}" >&2
+        exit 1
+    fi
+    if [ "${target_residue_count}" -gt "${max_target_residues}" ]; then
+        echo "Target PDB has ${target_residue_count} amino-acid residues; the maximum is ${max_target_residues}." >&2
+        exit 1
+    fi
+    echo "Validated target PDB: ${target_residue_count} amino-acid residues (maximum ${max_target_residues})."
+
+    design_mode="<%= context.pdj_design_mode %>"
     seq_method="<%= context.pdj_seq_method %>"
     pred_method="<%= context.pdj_pred_method %>"
     hotspots_raw="<%= context.hotspots %>"
@@ -215,10 +205,10 @@ else
     for item in "${hotspot_items[@]}"; do
         [ -z "${item}" ] && continue
 
-        if [[ "${item}" =~ ^[0-9]+$ ]]; then
+        if [[ "${item}" =~ ^[0-9]+(-[0-9]+)?$ ]]; then
             formatted="${chain}${item}"
-        elif [[ "${item}" =~ ^[A-Za-z][0-9]+$ ]]; then
-            formatted="${item}"
+        elif [[ "${item}" =~ ^[A-Za-z]([0-9]+(-[0-9]+)?)?$ ]]; then
+            formatted="${item^^}"
         else
             formatted="${item}"
         fi
@@ -236,6 +226,7 @@ else
     design_length="${min_length}-${max_length}"
 
     af2_max_pae_interaction="<%= context.af2_max_pae_interaction %>"
+    af2_min_iptm="<%= context.af2_min_iptm %>"
     af2_min_plddt_overall="<%= context.af2_min_plddt_overall %>"
     af2_max_rmsd_binder_bndaln="<%= context.af2_max_rmsd_binder_bndaln %>"
     af2_max_rmsd_binder_tgtaln="<%= context.af2_max_rmsd_binder_tgtaln %>"
@@ -243,9 +234,18 @@ else
     boltz_max_rmsd_binder="<%= context.boltz_max_rmsd_binder %>"
     boltz_max_rmsd_target="<%= context.boltz_max_rmsd_target %>"
     boltz_max_rmsd_overall="<%= context.boltz_max_rmsd_overall %>"
-    boltz_min_ptm_interface="<%= context.boltz_min_ptm_interface %>"
+    boltz_min_iptm="<%= context.boltz_min_iptm %>"
+    boltz_min_ipsae_min="<%= context.boltz_min_ipsae_min %>"
+    boltz_min_pdockq2_min="<%= context.boltz_min_pdockq2_min %>"
+    pr_min_intface_shpcomp="<%= context.pr_min_intface_shpcomp %>"
+    pr_min_intface_hbonds="<%= context.pr_min_intface_hbonds %>"
+    pr_max_intface_unsat_hbonds="<%= context.pr_max_intface_unsat_hbonds %>"
+    pr_max_surfhphobics="<%= context.pr_max_surfhphobics %>"
 
     mpnn_relax_max_cycles="<%= context.mpnn_relax_max_cycles %>"
+    mpnn_checkpoint_type="<%= context.mpnn_checkpoint_type %>"
+    mpnn_checkpoint_model="<%= context.mpnn_checkpoint_model %>"
+    mpnn_backbone_noise="<%= context.mpnn_backbone_noise %>"
     uncropped_target_pdb="<%= context.uncropped_target_pdb %>"
     boltz_use_templates="<%= context.boltz_use_templates %>"
     boltz_input_msa="<%= context.boltz_input_msa %>"
@@ -253,61 +253,101 @@ else
     seq_min_ext_coef="<%= context.seq_min_ext_coef %>"
     max_designs="<%= context.max_designs %>"
     max_seqs_per_fold="<%= context.max_seqs_per_fold %>"
+    flexible_residues="<%= context.flexible_residues %>"
+    rfd_ckpt_override="<%= context.rfd_ckpt_override %>"
+    rfd_noise_scale="<%= context.rfd_noise_scale %>"
+    bc_chains="<%= context.bc_chains %>"
+    bc_design_protocol="<%= context.bc_design_protocol %>"
+    bc_template_protocol="<%= context.bc_template_protocol %>"
+    bc_omit_aas="<%= context.bc_omit_aas %>"
+    bc_fix_interface_residues="<%= context.bc_fix_interface_residues %>"
+    af2_initial_guess="<%= context.af2_initial_guess %>"
+    boltz_recycling_steps="<%= context.boltz_recycling_steps %>"
+    boltz_diffusion_samples="<%= context.boltz_diffusion_samples %>"
+    boltz_sampling_steps="<%= context.boltz_sampling_steps %>"
+    boltz_use_potentials="<%= context.boltz_use_potentials %>"
+    boltz_predict_unbound_binder="<%= context.boltz_predict_unbound_binder %>"
+    zip_pdbs="<%= context.zip_pdbs %>"
+    rank_designs="<%= context.rank_designs %>"
+    ranking_metric="<%= context.ranking_metric %>"
 
     pdj_args=(
-        # Schema-style names (PapenfussLab/proteindj)
-        --design_mode 'binder_denovo'
+        --design_mode "${design_mode}"
         --num_designs "${ndesigns}"
         --input_pdb "${target}"
-        --hotspot_residues "${hotspots}"
-        # Legacy names (older tlitfin/PapenfussLab revisions)
-        --rfd_num_designs "${ndesigns}"
-        --rfd_mode 'binder_denovo'
-        --rfd_input_pdb "${target}"
-        --rfd_hotspots "[${hotspots}]"
         --design_length "${design_length}"
         --seqs_per_design "${nseqs}"
         --seq_method "${seq_method}"
         --pred_method "${pred_method}"
-        --gpus 20
         --out_dir "${OUT_DIR}"
         --af2_models "${MODEL_DIR}/af2/"
+        --mpnn_models "${MODEL_DIR}/mpnn/"
         --rfd_models "${MODEL_DIR}/rfd/"
         --boltz_models "${MODEL_DIR}/boltz/"
     )
 
-    if [ "${pred_method}" = "af2" ]; then
+    pdj_args+=(--container_registry "${PDJ_CONTAINER_REGISTRY}" --container_version "${PDJ_CONTAINER_VERSION}")
+
+    [ -n "${hotspots}" ] && pdj_args+=(--hotspot_residues "${hotspots}")
+    [ -n "${flexible_residues}" ] && pdj_args+=(--flexible_residues "${flexible_residues}")
+    [ -n "${rfd_ckpt_override}" ] && pdj_args+=(--rfd_ckpt_override "${rfd_ckpt_override}")
+    [ -n "${rfd_noise_scale}" ] && pdj_args+=(--rfd_noise_scale "${rfd_noise_scale}")
+    [ -n "${bc_chains}" ] && pdj_args+=(--bc_chains "${bc_chains}")
+    [ -n "${bc_design_protocol}" ] && pdj_args+=(--bc_design_protocol "${bc_design_protocol}")
+    [ -n "${bc_template_protocol}" ] && pdj_args+=(--bc_template_protocol "${bc_template_protocol}")
+    [ -n "${bc_omit_aas}" ] && pdj_args+=(--bc_omit_AAs "${bc_omit_aas}")
+    [ -n "${bc_fix_interface_residues}" ] && pdj_args+=(--bc_fix_interface_residues "${bc_fix_interface_residues}")
+    [ -n "${zip_pdbs}" ] && pdj_args+=(--zip_pdbs "${zip_pdbs}")
+    [ -n "${rank_designs}" ] && pdj_args+=(--rank_designs "${rank_designs}")
+    [ -n "${ranking_metric}" ] && pdj_args+=(--ranking_metric "${ranking_metric}")
+
+    if [ "${pred_method}" = "af2" ] || [ "${pred_method}" = "af2_boltz" ]; then
+        [ -n "${af2_initial_guess}" ] && pdj_args+=(--af2_initial_guess "${af2_initial_guess}")
+        [ -n "${af2_min_iptm}" ] && pdj_args+=(--af2_min_iptm "${af2_min_iptm}")
         [ -n "${af2_max_pae_interaction}" ] && pdj_args+=(--af2_max_pae_interaction "${af2_max_pae_interaction}")
         [ -n "${af2_min_plddt_overall}" ] && pdj_args+=(--af2_min_plddt_overall "${af2_min_plddt_overall}")
         [ -n "${af2_max_rmsd_binder_bndaln}" ] && pdj_args+=(--af2_max_rmsd_binder_bndaln "${af2_max_rmsd_binder_bndaln}")
         [ -n "${af2_max_rmsd_binder_tgtaln}" ] && pdj_args+=(--af2_max_rmsd_binder_tgtaln "${af2_max_rmsd_binder_tgtaln}")
-    elif [ "${pred_method}" = "boltz" ]; then
+    fi
+
+    if [ "${pred_method}" = "boltz" ] || [ "${pred_method}" = "af2_boltz" ]; then
         [ -n "${boltz_use_templates}" ] && pdj_args+=(--boltz_use_templates "${boltz_use_templates}")
         [ -n "${boltz_input_msa}" ] && pdj_args+=(--boltz_input_msa "${boltz_input_msa}")
         [ -n "${boltz_max_rmsd_binder}" ] && pdj_args+=(--boltz_max_rmsd_binder "${boltz_max_rmsd_binder}")
         [ -n "${boltz_max_rmsd_target}" ] && pdj_args+=(--boltz_max_rmsd_target "${boltz_max_rmsd_target}")
         [ -n "${boltz_max_rmsd_overall}" ] && pdj_args+=(--boltz_max_rmsd_overall "${boltz_max_rmsd_overall}")
-        [ -n "${boltz_min_ptm_interface}" ] && pdj_args+=(--boltz_min_ptm_interface "${boltz_min_ptm_interface}")
+        [ -n "${boltz_min_iptm}" ] && pdj_args+=(--boltz_min_iptm "${boltz_min_iptm}")
+        [ -n "${boltz_min_ipsae_min}" ] && pdj_args+=(--boltz_min_ipSAE_min "${boltz_min_ipsae_min}")
+        [ -n "${boltz_min_pdockq2_min}" ] && pdj_args+=(--boltz_min_pDockQ2_min "${boltz_min_pdockq2_min}")
+        [ -n "${boltz_recycling_steps}" ] && pdj_args+=(--boltz_recycling_steps "${boltz_recycling_steps}")
+        [ -n "${boltz_diffusion_samples}" ] && pdj_args+=(--boltz_diffusion_samples "${boltz_diffusion_samples}")
+        [ -n "${boltz_sampling_steps}" ] && pdj_args+=(--boltz_sampling_steps "${boltz_sampling_steps}")
+        [ -n "${boltz_use_potentials}" ] && pdj_args+=(--boltz_use_potentials "${boltz_use_potentials}")
+        [ -n "${boltz_predict_unbound_binder}" ] && pdj_args+=(--boltz_predict_unbound_binder "${boltz_predict_unbound_binder}")
     fi
 
+    [ -n "${mpnn_checkpoint_type}" ] && pdj_args+=(--mpnn_checkpoint_type "${mpnn_checkpoint_type}")
+    [ -n "${mpnn_checkpoint_model}" ] && pdj_args+=(--mpnn_checkpoint_model "${mpnn_checkpoint_model}")
+    [ -n "${mpnn_backbone_noise}" ] && pdj_args+=(--mpnn_backbone_noise "${mpnn_backbone_noise}")
     [ -n "${mpnn_relax_max_cycles}" ] && pdj_args+=(--mpnn_relax_max_cycles "${mpnn_relax_max_cycles}")
     [ -n "${uncropped_target_pdb}" ] && pdj_args+=(--uncropped_target_pdb "${uncropped_target_pdb}")
     [ -n "${fold_min_ss}" ] && pdj_args+=(--fold_min_ss "${fold_min_ss}")
     [ -n "${seq_min_ext_coef}" ] && pdj_args+=(--seq_min_ext_coef "${seq_min_ext_coef}")
     [ -n "${max_designs}" ] && pdj_args+=(--max_designs "${max_designs}")
     [ -n "${max_seqs_per_fold}" ] && pdj_args+=(--max_seqs_per_fold "${max_seqs_per_fold}")
+    [ -n "${pr_min_intface_shpcomp}" ] && pdj_args+=(--pr_min_intface_shpcomp "${pr_min_intface_shpcomp}")
+    [ -n "${pr_min_intface_hbonds}" ] && pdj_args+=(--pr_min_intface_hbonds "${pr_min_intface_hbonds}")
+    [ -n "${pr_max_intface_unsat_hbonds}" ] && pdj_args+=(--pr_max_intface_unsat_hbonds "${pr_max_intface_unsat_hbonds}")
+    [ -n "${pr_max_surfhphobics}" ] && pdj_args+=(--pr_max_surfhphobics "${pr_max_surfhphobics}")
 
     printf -v workflow_args '%q ' "${pdj_args[@]}" \
         -c "${PDJ_NEXTFLOW_CONFIG}" \
         -profile apptainer \
-        -r "${PDJ_REVISION}" \
-        -latest
+        "${PDJ_VERSION_ARGS[@]}"
     write_metrics "${PDJ_REPOSITORY}" "${PDJ_REVISION}" "${PDJ_NEXTFLOW_CONFIG}" "${workflow_args}"
 
     nextflow run "${PDJ_REPOSITORY}" \
         "${pdj_args[@]}" \
         -c "${PDJ_NEXTFLOW_CONFIG}" \
         -profile apptainer \
-        -r "${PDJ_REVISION}" \
-        -latest
-fi
+        "${PDJ_VERSION_ARGS[@]}"
