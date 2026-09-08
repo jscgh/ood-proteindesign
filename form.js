@@ -14,12 +14,7 @@
     "mpnn_checkpoint_type",
     "mpnn_checkpoint_model",
     "mpnn_backbone_noise",
-    "mpnn_relax_max_cycles",
-    "mpnn_relax_seqs_per_cycle",
-    "mpnn_relax_output",
-    "mpnn_relax_convergence_rmsd",
-    "mpnn_relax_convergence_score",
-    "mpnn_relax_convergence_max_cycles",
+    "mpnn_relax_max_cycles"
   ];
   const FOLDING_ADVANCED_HIDE_TARGETS = [
     "uncropped_target_pdb",
