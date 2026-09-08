@@ -6,7 +6,7 @@ codebases.
 
 ## Upstream workflow used at runtime
 
-- ProteinDJ: https://github.com/JoshuaMHardy/proteindj3
+- ProteinDJ: https://github.com/PapenfussLab/proteindj
   - See upstream `LICENSE` file for terms.
   - README includes extensive citation guidance for integrated tools.
 - FreeBindCraft (used by ProteinDJ's `bindcraft_denovo` mode):

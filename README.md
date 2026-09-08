@@ -84,10 +84,11 @@ does not fail a design job if the metrics directory is unavailable.
 
 ## ProteinDJ 3 deployment
 
-The deployed checkout is `/srv/scratch/sbf-pipelines/proteindj3`, pinned to
-the ProteinDJ `v3.0.0` release commit
-`4b7205893f0fa2544e9c8a3d19900204bab13468`. Keep that checkout
-available and readable from compute nodes.
+The launcher uses the ProteinDJ 3 GitHub repository
+`https://github.com/PapenfussLab/proteindj`, pinned via
+`PROTEINDESIGN_PDJ_REVISION` (for example, the `v3.0.0` release). Sites may use
+a local checkout instead, provided the configured revision is available and
+readable from compute nodes.
 The launcher requires at least 50 unique standard amino-acid residues and warns
 when target PDBs contain more than 300 across all chains. Larger targets remain
 allowed; empty or unparseable targets are rejected before Nextflow is submitted.
