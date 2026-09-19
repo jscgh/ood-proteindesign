@@ -43,9 +43,9 @@ collect_debug_files() {
     if [ -n "${NXF_WORK:-}" ] && [ -d "${NXF_WORK}" ]; then
         rsync -a --no-perms --no-owner --no-group --max-size=50m "${NXF_WORK}" "${DEBUGDIR}/"
     fi
+    chgrp "${DEBUGGROUP}" -R "${DEBUGDIR}"
     find "${DEBUGDIR}" -type d -exec chmod 2770 {} +
     find "${DEBUGDIR}" -type f -exec chmod 660 {} +
-    chgrp "${DEBUGGROUP}" -R "${DEBUGDIR}"
     exit "${exit_code}"
 }
 
